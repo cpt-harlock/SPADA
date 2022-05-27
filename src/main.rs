@@ -1,5 +1,6 @@
 //use spada::bloom_filter;
 //use spada::cms;
+use spada::cuckoo_hash;
 
 pub use pcap_parser::traits::PcapReaderIterator;
 pub use pcap_parser::*;
@@ -16,6 +17,7 @@ pub use csv::Writer;
 pub use std::io::Write;
 //use itertools::Itertools;
 //use std::iter;
+use std::net::Ipv4Addr;
 
 fn main() {
 
@@ -31,6 +33,7 @@ fn main() {
     let mut file = File::open(filename).unwrap();
     let mut buffer = Vec::new();
     let mut hashmap = std::collections::HashMap::new();
+    let mut cuckoo = cuckoo_hash::CuckooHash::build_cuckoo_hash(1024,2000,4);
     let mut first_packet=true;
     let mut epoch=0;
     let mut t0=0.0;
@@ -175,7 +178,6 @@ fn main() {
 **************************************************/
 
                         let key  = (l3_packet.source(), l3_packet.destination(), proto, src_port, dst_port);
-                        num_packets += 1;
                         if first_packet {
                             t0=ts; 
                             first_packet=false;
@@ -188,13 +190,22 @@ fn main() {
                             println!("#packets {}", num_packets);
                             println!("#flows {}", hashmap.len());
                             hashmap.clear();
+                            cuckoo.clear();
                             println!("new epoch: [{}] ", epoch);
                             num_packets =0;
                         }
+                        num_packets += 1;
                         let values = hashmap.get(&key).unwrap_or(&0).clone(); 
                         hashmap.insert(key,values+1);
                         print!("{} ", ts);
                         println!(" key {:?} ", key);
+                        if cuckoo.check(key) {
+                            let value = cuckoo.get_key_value(key).unwrap(); 
+                            cuckoo.update(key,value+1); 
+                        }
+                        else {
+                            cuckoo.insert(key,1); 
+                        }
                     }
                 }
             }
@@ -203,6 +214,10 @@ fn main() {
     }
     println!("#packets {}", num_packets);
     println!("#flows {}", hashmap.len());
+    for (k,v) in &hashmap {
+        println!("TRUE k: {:?} v: {}",k,v);
+        println!("in cuckoo we have: {:?} {:?}",k,cuckoo.get_key_value(*k));
+    }
 }
 
 

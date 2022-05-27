@@ -9,3 +9,4 @@ edition = "2021"
 pcap-parser = { version = "*", features = ["data"] }
 packet = "*"
 csv = "*"
+rand = "*"
