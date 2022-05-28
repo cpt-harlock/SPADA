@@ -17,11 +17,34 @@ pub use csv::Writer;
 pub use std::io::Write;
 //use itertools::Itertools;
 //use std::iter;
+use std::hash::{Hash,BuildHasher,Hasher};
+use hash32::Murmur3Hasher;
+use hash32::BuildHasherDefault;
+
+fn compute_bin_prefix_pair<T: Hash>(value: T, prefix_bit_length:u32) -> (u32, u32) {
+    let mut s: Murmur3Hasher = BuildHasherDefault::default().build_hasher();
+    value.hash(&mut s);
+    let hashed_value = s.finish() as u32;
+    let bin_index = hashed_value >> (32 - prefix_bit_length); 
+    let leading_zeros = compute_leading_zeros(hashed_value << prefix_bit_length, prefix_bit_length);
+    (bin_index, leading_zeros)
+}
+
+fn compute_leading_zeros(hashed_value: u32, prefix_bit_length: u32) -> u32 {
+    let mut count = 1;
+    for i in 0..((32 - prefix_bit_length) - 1){
+        if (hashed_value & (1 << (32 - 1 - i))) != 0 {
+            break;
+        }
+        count += 1;
+    }
+    count 
+}
 
 fn main() {
 
     let filename = std::env::args().nth(1).unwrap_or("./test.pcap".to_string());
-    //let lazy = std::env::args().nth(2).unwrap_or("0".to_string()).parse::<usize>().unwrap();
+    let m = std::env::args().nth(2).unwrap_or("6".to_string()).parse::<usize>().unwrap() as u32;
     
 
 
@@ -33,10 +56,12 @@ fn main() {
     let mut buffer = Vec::new();
     let mut hashmap = std::collections::HashMap::new();
     let mut cuckoo = cuckoo_hash::CuckooHash::build_cuckoo_hash(1024,2000,4);
+    let mut sparseSketchArray = cuckoo_hash::CuckooHash::build_cuckoo_hash(1024,2000,4);
     let mut first_packet=true;
     let mut epoch=0;
     let mut t0=0.0;
     let mut num_packets = 0;
+    let mut FlowIDcounter:u32 = 0;
     let mut num_insertions = 0;
 
     file.read_to_end(&mut buffer).unwrap();
@@ -178,7 +203,8 @@ fn main() {
 **************************************************/
 
                         //epoch reset and print
-                        let key  = (l3_packet.source(), l3_packet.destination(), proto, src_port, dst_port);
+                        //let key  = (l3_packet.source(), l3_packet.destination(), proto, src_port, dst_port);
+                        let key  = l3_packet.source(); //, l3_packet.destination(), proto, src_port, dst_port);
                         if first_packet {
                             t0=ts; 
                             first_packet=false;
@@ -196,23 +222,46 @@ fn main() {
                             println!("new epoch: [{}] ", epoch);
                             num_packets =0;
                             num_insertions =0;
+                            FlowIDcounter=0;
                         }
 
 
-                        //isertion in data structures
+                        //insertion in first data structure (Key2IDCH)
                         num_packets += 1;
                         let values = hashmap.get(&key).unwrap_or(&0).clone(); 
                         hashmap.insert(key,values+1);
-                        print!("{} ", ts);
-                        println!(" key {:?} ", key);
+                        //print!("{} ", ts);
+                        //println!(" key {:?} ", key);
+
+
+                        let FlowID; 
                         if cuckoo.check(key) { //just update
-                            let value = cuckoo.get_key_value(key).unwrap(); 
-                            cuckoo.update(key,value+1); 
+                            let value:(u32,u32) = cuckoo.get_key_value(key).unwrap(); 
+                            cuckoo.update(key,(value.0,value.1+1)); 
+                            FlowID=value.0;
                         }
                         else { //first insertion
-                            let ins = cuckoo.insert(key,1); 
-                             num_insertions +=ins;
+                            cuckoo.insert(key,(FlowIDcounter,1)); 
+                            FlowID=FlowIDcounter;
+                            FlowIDcounter +=1;
                         }
+
+                        //insertion in second data structure (SparseSketchArray)
+                        // (FlowID,index) for an HLL with m bins
+                        let (index,leading_zeros)=compute_bin_prefix_pair(l3_packet.destination(),m);
+                        if sparseSketchArray.check((FlowID,index)) { //just update
+                            let value:u32 = sparseSketchArray.get_key_value((FlowID,index)).unwrap(); 
+
+                            //hll update
+                            if leading_zeros > value { 
+                                sparseSketchArray.update((FlowID,index),leading_zeros); 
+                            }
+                        }
+                        else { //first insertion
+                            let ins = sparseSketchArray.insert((FlowID,index), leading_zeros); 
+                            num_insertions +=ins;
+                        }
+                        //println!("k: {:?} {:?} v: {:?}",key,l3_packet.destination(),(FlowID,index,leading_zeros));
                     }
                 }
             }

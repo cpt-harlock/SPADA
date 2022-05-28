@@ -92,8 +92,8 @@ impl <K: std::fmt::Debug + Hash + std::cmp::PartialEq+ std::clone::Clone,V:  std
         let mut hash_2 = DefaultHasher::default();
         0u32.hash(&mut hash_1);
         1u32.hash(&mut hash_2);
-        Some(key.clone()).hash(&mut hash_1);
-        Some(key.clone()).hash(&mut hash_2);
+        Some(&key).hash(&mut hash_1);
+        Some(&key).hash(&mut hash_2);
         let first_index = hash_1.finish() as usize % self.rows;
         let second_index = hash_2.finish() as usize % self.rows;
 
@@ -124,8 +124,8 @@ impl <K: std::fmt::Debug + Hash + std::cmp::PartialEq+ std::clone::Clone,V:  std
         let mut hash_2 = DefaultHasher::default();
         0u32.hash(&mut hash_1);
         1u32.hash(&mut hash_2);
-        Some(key.clone()).hash(&mut hash_1);
-        Some(key.clone()).hash(&mut hash_2);
+        Some(&key).hash(&mut hash_1);
+        Some(&key).hash(&mut hash_2);
         let first_index = hash_1.finish() as usize % self.rows;
         let second_index = hash_2.finish() as usize % self.rows;
 
@@ -156,8 +156,8 @@ impl <K: std::fmt::Debug + Hash + std::cmp::PartialEq+ std::clone::Clone,V:  std
         let mut hash_2 = DefaultHasher::default();
         0u32.hash(&mut hash_1);
         1u32.hash(&mut hash_2);
-        Some(key.clone()).hash(&mut hash_1);
-        Some(key.clone()).hash(&mut hash_2);
+        Some(&key).hash(&mut hash_1);
+        Some(&key).hash(&mut hash_2);
         let first_index = hash_1.finish() as usize % self.rows;
         let second_index = hash_2.finish() as usize % self.rows;
 

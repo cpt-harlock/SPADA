@@ -10,3 +10,4 @@ pcap-parser = { version = "*", features = ["data"] }
 packet = "*"
 csv = "*"
 rand = "*"
+hash32 = "*"
