@@ -17,7 +17,6 @@ pub use csv::Writer;
 pub use std::io::Write;
 //use itertools::Itertools;
 //use std::iter;
-use std::net::Ipv4Addr;
 
 fn main() {
 
@@ -38,6 +37,7 @@ fn main() {
     let mut epoch=0;
     let mut t0=0.0;
     let mut num_packets = 0;
+    let mut num_insertions = 0;
 
     file.read_to_end(&mut buffer).unwrap();
     // try pcap first
@@ -177,6 +177,7 @@ fn main() {
 *  Packet processing starts here
 **************************************************/
 
+                        //epoch reset and print
                         let key  = (l3_packet.source(), l3_packet.destination(), proto, src_port, dst_port);
                         if first_packet {
                             t0=ts; 
@@ -189,22 +190,28 @@ fn main() {
                             ts -=epoch_time;
                             println!("#packets {}", num_packets);
                             println!("#flows {}", hashmap.len());
+                            println!("#insertions {}", num_insertions);
                             hashmap.clear();
                             cuckoo.clear();
                             println!("new epoch: [{}] ", epoch);
                             num_packets =0;
+                            num_insertions =0;
                         }
+
+
+                        //isertion in data structures
                         num_packets += 1;
                         let values = hashmap.get(&key).unwrap_or(&0).clone(); 
                         hashmap.insert(key,values+1);
                         print!("{} ", ts);
                         println!(" key {:?} ", key);
-                        if cuckoo.check(key) {
+                        if cuckoo.check(key) { //just update
                             let value = cuckoo.get_key_value(key).unwrap(); 
                             cuckoo.update(key,value+1); 
                         }
-                        else {
-                            cuckoo.insert(key,1); 
+                        else { //first insertion
+                            let ins = cuckoo.insert(key,1); 
+                             num_insertions +=ins;
                         }
                     }
                 }
@@ -214,10 +221,11 @@ fn main() {
     }
     println!("#packets {}", num_packets);
     println!("#flows {}", hashmap.len());
-    for (k,v) in &hashmap {
+    println!("#insertions {}", num_insertions);
+    /*for (k,v) in &hashmap {
         println!("TRUE k: {:?} v: {}",k,v);
         println!("in cuckoo we have: {:?} {:?}",k,cuckoo.get_key_value(*k));
-    }
+    }*/
 }
 
 
