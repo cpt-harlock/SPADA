@@ -74,6 +74,7 @@ fn main() {
     let filename = matches.value_of("filename").unwrap();
     let m = matches.value_of("m").unwrap().parse::<u32>().unwrap();
     let epoch_time=matches.value_of("epoch_time").unwrap().parse::<f64>().unwrap();
+    println!("parameters are: -f {:?} -m {:?} -e {:?}", filename, m, epoch_time);
 
 
 
