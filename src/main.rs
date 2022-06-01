@@ -1,6 +1,7 @@
 //use spada::bloom_filter;
 //use spada::cms;
 use spada::cuckoo_hash;
+use clap::{Arg, Command};
 
 pub use pcap_parser::traits::PcapReaderIterator;
 pub use pcap_parser::*;
@@ -43,12 +44,38 @@ fn compute_leading_zeros(hashed_value: u32, prefix_bit_length: u32) -> u32 {
 
 fn main() {
 
-    let filename = std::env::args().nth(1).unwrap_or("./test.pcap".to_string());
-    let m = std::env::args().nth(2).unwrap_or("6".to_string()).parse::<usize>().unwrap() as u32;
+    let args: Vec<String> = std::env::args().collect();
+
+    println!("command line is: {:?}", &args);
+    let matches = Command::new("Spada simulator")
+        .version("0.1.0")
+        .author("sp")
+        .about("Simulate Sparse Data structures")
+        .arg(Arg::new("filename")
+             .short('f')
+             .long("file")
+             .takes_value(true)
+             .default_value("./test.pcap")
+             .help("pcap file"))
+        .arg(Arg::new("m")
+             .short('m')
+             .long("mhll")
+             .takes_value(true)
+             .default_value("6")
+             .help("use 2^m bins per HLL"))
+        .arg(Arg::new("epoch_time")
+             .short('e')
+             .long("epoch")
+             .takes_value(true)
+             .default_value("1.0")
+             .help("time between epochs"))
+        .get_matches();
     
+    let filename = matches.value_of("filename").unwrap();
+    let m = matches.value_of("m").unwrap().parse::<u32>().unwrap();
+    let epoch_time=matches.value_of("epoch_time").unwrap().parse::<f64>().unwrap();
 
 
-    let mut epoch_time=1.0;
 
     let mut if_linktypes = Vec::new();
     let mut trace_linktype;
@@ -63,6 +90,10 @@ fn main() {
     let mut num_packets = 0;
     let mut FlowIDcounter:u32 = 0;
     let mut num_insertions = 0;
+
+
+    println!("stat:\tEpoch\tpackets\tflows\tinsertions\t{}",m);
+
 
     file.read_to_end(&mut buffer).unwrap();
     // try pcap first
@@ -217,8 +248,12 @@ fn main() {
                             println!("#packets {}", num_packets);
                             println!("#flows {}", hashmap.len());
                             println!("#insertions {}", num_insertions);
+                            println!("stat:\t{}\t{}\t{}\t{}",epoch,num_packets,hashmap.len(),num_insertions);
+                            
+                            
                             hashmap.clear();
                             cuckoo.clear();
+                            sparseSketchArray.clear();
                             println!("new epoch: [{}] ", epoch);
                             num_packets =0;
                             num_insertions =0;
