@@ -2,6 +2,7 @@
 //use spada::cms;
 use spada::cuckoo_hash;
 use clap::{Arg, Command};
+use std::process::exit;
 
 pub use pcap_parser::traits::PcapReaderIterator;
 pub use pcap_parser::*;
@@ -83,14 +84,16 @@ fn main() {
     let mut file = File::open(filename).unwrap();
     let mut buffer = Vec::new();
     let mut hashmap = std::collections::HashMap::new();
-    let mut cuckoo = cuckoo_hash::CuckooHash::build_cuckoo_hash(1024,2000,4);
-    let mut sparseSketchArray = cuckoo_hash::CuckooHash::build_cuckoo_hash(1024,2000,4);
+    let mut cuckoo = cuckoo_hash::CuckooHash::build_cuckoo_hash(8192,4,2000);
+    //let mut sparseSketchArray = cuckoo_hash::CuckooHash::build_cuckoo_hash(8192,4,2000);
+    let mut sparseSketchArray = cuckoo_hash::CuckooHash::build_cuckoo_hash(4096,8,2000);
     let mut first_packet=true;
     let mut epoch=0;
     let mut t0=0.0;
     let mut num_packets = 0;
     let mut FlowIDcounter:u32 = 0;
     let mut num_insertions = 0;
+    let mut num_m1_insertions = 0;
 
 
     println!("stat:\tEpoch\tpackets\tflows\tinsertions\t{}",m);
@@ -249,7 +252,8 @@ fn main() {
                             println!("#packets {}", num_packets);
                             println!("#flows {}", hashmap.len());
                             println!("#insertions {}", num_insertions);
-                            println!("stat:\t{}\t{}\t{}\t{}",epoch,num_packets,hashmap.len(),num_insertions);
+                            println!("#insertions >1 {}", num_m1_insertions);
+                            println!("stat:\t{}\t{}\t{}\t{}\t{}",epoch,num_packets,hashmap.len(),num_insertions,num_m1_insertions);
                             
                             
                             hashmap.clear();
@@ -258,6 +262,7 @@ fn main() {
                             println!("new epoch: [{}] ", epoch);
                             num_packets =0;
                             num_insertions =0;
+                            num_m1_insertions =0;
                             FlowIDcounter=0;
                         }
 
@@ -277,7 +282,8 @@ fn main() {
                             FlowID=value.0;
                         }
                         else { //first insertion
-                            cuckoo.insert(key,(FlowIDcounter,1)); 
+                            let r=cuckoo.insert(key,(FlowIDcounter,1)); 
+                            if (r==-1) {println!("ERROR in cuckoo insert"); exit(-1);}
                             FlowID=FlowIDcounter;
                             FlowIDcounter +=1;
                         }
@@ -296,6 +302,12 @@ fn main() {
                         else { //first insertion
                             let ins = sparseSketchArray.insert((FlowID,index), leading_zeros); 
                             num_insertions +=ins;
+                            if ins>1 { num_m1_insertions +=1;}
+                            //println!("INS={}",ins);
+                            if ins<0 {
+                                println!("ERROR in SparseArray insert"); 
+                                exit(-1);
+                            }
                         }
                         //println!("k: {:?} {:?} v: {:?}",key,l3_packet.destination(),(FlowID,index,leading_zeros));
                     }
@@ -307,6 +319,7 @@ fn main() {
     println!("#packets {}", num_packets);
     println!("#flows {}", hashmap.len());
     println!("#insertions {}", num_insertions);
+    println!("#insertions >1 {}", num_m1_insertions);
     /*for (k,v) in &hashmap {
         println!("TRUE k: {:?} v: {}",k,v);
         println!("in cuckoo we have: {:?} {:?}",k,cuckoo.get_key_value(*k));
