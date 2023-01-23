@@ -8,20 +8,50 @@ pub struct CuckooHash<K,V> {
     bins: Vec<Vec<Vec<(Option<K>,Option<V>)>>>,
     rows: usize,
     slots: usize,
+    tables: usize,
     extra_location: (Option<K>, Option<V>),
     insertion_loop_limit: usize,
 }
 
 
 impl <K: std::fmt::Debug + Hash + std::cmp::PartialEq+ std::clone::Clone,V:  std::clone::Clone>CuckooHash<K,V> {
-    pub fn build_cuckoo_hash(rows: usize, slots: usize, insertion_loop_limit: usize) -> CuckooHash<K,V> {
+    pub fn build_cuckoo_hash(rows: usize, slots: usize, tables: usize, insertion_loop_limit: usize) -> CuckooHash<K,V> {
         CuckooHash {
-            bins: vec![vec![vec![(None,None);slots];rows];2],
+            bins: vec![vec![vec![(None,None);slots];rows];tables],
             rows,
             slots,
+            tables,
             extra_location: (None,None),
             insertion_loop_limit,
         }
+    }
+    
+    pub fn load(&self) -> f32 {
+        let mut cont=0;
+        for t in 0..self.tables {
+            for i in 0..self.rows {
+                for j in 0..self.slots {
+                    if self.bins[t][i][j].0 !=None {
+                        cont +=1;
+                    }
+                }
+            }
+        }
+        return (cont as f32)/((self.rows*self.slots*self.tables) as f32); 
+    }
+
+    pub fn len(&self) -> usize {
+        let mut cont=0;
+        for t in 0..self.tables {
+            for i in 0..self.rows {
+                for j in 0..self.slots {
+                    if self.bins[t][i][j].0 !=None {
+                        cont +=1;
+                    }
+                }
+            }
+        }
+        cont 
     }
 
     /// Insert a new key-value pair
@@ -32,52 +62,37 @@ impl <K: std::fmt::Debug + Hash + std::cmp::PartialEq+ std::clone::Clone,V:  std
         if self.extra_location.0 != None  {
             return -1;
         }
-        let mut loop_counter = 1;
+        let mut loop_counter = 0;
         self.extra_location = (Some(key), Some(value));
-        let mut kick=0;
         loop {
-            let mut hash_1 = DefaultHasher::default();
-            let mut hash_2 = DefaultHasher::default();
-            0u32.hash(&mut hash_1);
-            1u32.hash(&mut hash_2);
-            //try first bin 
-            self.extra_location.0.hash(&mut hash_1);
-            let first_index = hash_1.finish() as usize % self.rows;
+            for t in 0..self.tables {
+                let mut hash = DefaultHasher::default();
+                (t as u32).hash(&mut hash);
+                self.extra_location.0.hash(&mut hash);
+                let index = hash.finish() as usize % self.rows;
 
-            //insert if there's space
-            for i in 0..self.slots {
-                if self.bins[0][first_index][i].0 ==None {
-                    self.bins[0][first_index][i]=self.extra_location.clone();
-                    //println!("Inserted {:?} in {},{}",self.extra_location.0,first_index,i);
-                    self.extra_location = (None,None);
-                    return loop_counter;
+                //insert if there's space in T[t]
+                for i in 0..self.slots {
+                    if self.bins[t][index][i].0 ==None {
+                        self.bins[t][index][i]=self.extra_location.clone();
+                        //println!("Inserted {:?} in {},{}",self.extra_location.0,first_index,i);
+                        self.extra_location = (None,None);
+                        return loop_counter;
+                    }
                 }
             }
 
-            //try second bin
-            self.extra_location.0.hash(&mut hash_2);
-            let second_index = hash_2.finish() as usize % self.rows;
-
-            //insert if there's space
-            for i in 0..self.slots {
-                if self.bins[1][second_index][i].0 == None {
-                    self.bins[1][second_index][i]=self.extra_location.clone();
-                    self.extra_location = (None,None);
-                    return loop_counter;
-                }
-            }
-            
             //else, pop a random element from the vector
+            let t=rand::thread_rng().gen_range(0..self.tables);
             let s=rand::thread_rng().gen_range(0..self.slots);
-            let mut index=first_index;
-            if kick==1 {
-                index=second_index; 
-            }
             let temp = self.extra_location.clone();
-            self.extra_location = self.bins[kick][index][s].clone();
-            self.bins[kick][index][s]=temp;
+            let mut hash = DefaultHasher::default();
+            (t as u32).hash(&mut hash);
+            self.extra_location.0.hash(&mut hash);
+            let index = hash.finish() as usize % self.rows;
+            self.extra_location = self.bins[t][index][s].clone();
+            self.bins[t][index][s]=temp;
 
-            kick = (kick +1) %2;
             loop_counter += 1;
             if loop_counter > self.insertion_loop_limit as i32 {
                 break;
@@ -88,63 +103,40 @@ impl <K: std::fmt::Debug + Hash + std::cmp::PartialEq+ std::clone::Clone,V:  std
 
 
     pub fn get_key_value(&self, key: K) -> Option<V> {
-        let mut hash_1 = DefaultHasher::default();
-        let mut hash_2 = DefaultHasher::default();
-        0u32.hash(&mut hash_1);
-        1u32.hash(&mut hash_2);
-        Some(&key).hash(&mut hash_1);
-        Some(&key).hash(&mut hash_2);
-        let first_index = hash_1.finish() as usize % self.rows;
-        let second_index = hash_2.finish() as usize % self.rows;
+            for t in 0..self.tables {
+                let mut hash = DefaultHasher::default();
+                (t as u32).hash(&mut hash);
+                Some(&key).hash(&mut hash);
+                let index = hash.finish() as usize % self.rows;
 
-        //try first bin 
-        for i in 0..self.slots {
-            if let Some(test) =&self.bins[0][first_index][i].0 {
-                if *test==key {
-                    return self.bins[0][first_index][i].1.clone();
+                //try if is in T[t]
+                for i in 0..self.slots {
+                    if let Some(test) =&self.bins[t][index][i].0 {
+                        if *test==key {
+                        return self.bins[t][index][i].1.clone();
+                        }
+                    }
                 }
             }
-        }
-
-        //try second bin
-        for i in 0..self.slots {
-            if let Some(test) =&self.bins[1][second_index][i].0 {
-                if *test==key {
-                    return self.bins[1][second_index][i].1.clone();
-                }
-            }
-        }
         return None;
     }
 
 
 // update if it is present, otherwise return false!
     pub fn update(&mut self, key: K, value: V) -> bool {
-        let mut hash_1 = DefaultHasher::default();
-        let mut hash_2 = DefaultHasher::default();
-        0u32.hash(&mut hash_1);
-        1u32.hash(&mut hash_2);
-        Some(&key).hash(&mut hash_1);
-        Some(&key).hash(&mut hash_2);
-        let first_index = hash_1.finish() as usize % self.rows;
-        let second_index = hash_2.finish() as usize % self.rows;
+        for t in 0..self.tables {
+            let mut hash = DefaultHasher::default();
+            (t as u32).hash(&mut hash);
+            Some(&key).hash(&mut hash);
+            let index = hash.finish() as usize % self.rows;
 
-        //try first bin 
-        for i in 0..self.slots {
-            if let Some(test) =&self.bins[0][first_index][i].0 {
-                if *test==key {
-                    self.bins[0][first_index][i].1=Some(value);
-                    return true;
-                }
-            }
-        }
-
-        //try second bin
-        for i in 0..self.slots {
-            if let Some(test) =&self.bins[1][second_index][i].0 {
-                if *test==key {
-                    self.bins[1][second_index][i].1=Some(value);
-                    return true;
+            //try if is in T[t]
+            for i in 0..self.slots {
+                if let Some(test) =&self.bins[t][index][i].0 {
+                    if *test==key {
+                        self.bins[t][index][i].1=Some(value);
+                        return true;
+                    }
                 }
             }
         }
@@ -152,31 +144,18 @@ impl <K: std::fmt::Debug + Hash + std::cmp::PartialEq+ std::clone::Clone,V:  std
     }
 
     pub fn check(&self, key: K) -> bool {
-        let mut hash_1 = DefaultHasher::default();
-        let mut hash_2 = DefaultHasher::default();
-        0u32.hash(&mut hash_1);
-        1u32.hash(&mut hash_2);
-        Some(&key).hash(&mut hash_1);
-        Some(&key).hash(&mut hash_2);
-        let first_index = hash_1.finish() as usize % self.rows;
-        let second_index = hash_2.finish() as usize % self.rows;
+        for t in 0..self.tables {
+            let mut hash = DefaultHasher::default();
+            (t as u32).hash(&mut hash);
+            Some(&key).hash(&mut hash);
+            let index = hash.finish() as usize % self.rows;
 
-        //try first bin 
-        for i in 0..self.slots {
-            if let Some(test) =&self.bins[0][first_index][i].0 {
-                if *test==key {
-                    //println!("Checked {:?} in {},{}",key,first_index,i);
-                    return true; 
-                }
-            }
-        }
-
-        //try second bin
-        for i in 0..self.slots {
-            if let Some(test) =&self.bins[1][second_index][i].0 { 
-                if *test==key {
-                    //println!("Checked {:?} in {},{}",key,second_index,i);
-                    return true; 
+            //try if is in T[t]
+            for i in 0..self.slots {
+                if let Some(test) =&self.bins[t][index][i].0 {
+                    if *test==key {
+                        return true;
+                    }
                 }
             }
         }
@@ -184,10 +163,11 @@ impl <K: std::fmt::Debug + Hash + std::cmp::PartialEq+ std::clone::Clone,V:  std
     }
 
     pub fn clear(&mut self) {
-        for i in 0..self.slots {
-            for j in 0..self.rows {
-                self.bins[0][j][i]= (None,None);
-                self.bins[1][j][i]= (None,None);
+        for t in 0..self.tables {
+            for i in 0..self.slots {
+                for j in 0..self.rows {
+                    self.bins[t][j][i]= (None,None);
+                }
             }
         }
     }

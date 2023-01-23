@@ -3,6 +3,7 @@
 use spada::cuckoo_hash;
 use clap::{Arg, Command};
 use std::process::exit;
+use core::cmp::max;
 
 pub use pcap_parser::traits::PcapReaderIterator;
 pub use pcap_parser::*;
@@ -64,6 +65,24 @@ fn main() {
              .takes_value(true)
              .default_value("6")
              .help("use 2^m bins per HLL"))
+        .arg(Arg::new("r")
+             .short('r')
+             .long("rows")
+             .takes_value(true)
+             .default_value("16384")
+             .help("use r rows for the cukoo hashing"))
+        .arg(Arg::new("s")
+             .short('s')
+             .long("slots")
+             .takes_value(true)
+             .default_value("1")
+             .help("use s slots for the cukoo hashing"))
+        .arg(Arg::new("t")
+             .short('t')
+             .long("tables")
+             .takes_value(true)
+             .default_value("4")
+             .help("use t Tables for the cukoo hashing"))
         .arg(Arg::new("epoch_time")
              .short('e')
              .long("epoch")
@@ -74,8 +93,11 @@ fn main() {
     
     let filename = matches.value_of("filename").unwrap();
     let m = matches.value_of("m").unwrap().parse::<u32>().unwrap();
+    let slots = matches.value_of("s").unwrap().parse::<usize>().unwrap();
+    let rows = matches.value_of("r").unwrap().parse::<usize>().unwrap();
+    let tables = matches.value_of("t").unwrap().parse::<usize>().unwrap();
     let epoch_time=matches.value_of("epoch_time").unwrap().parse::<f64>().unwrap();
-    println!("parameters are: -f {:?} -m {:?} -e {:?}", filename, m, epoch_time);
+    println!("parameters are: -f {:?} -m {:?} -e {:?} -s {:?} -r {:?} -t {:?}", filename, m, epoch_time,slots,rows,tables);
 
 
 
@@ -84,19 +106,20 @@ fn main() {
     let mut file = File::open(filename).unwrap();
     let mut buffer = Vec::new();
     let mut hashmap = std::collections::HashMap::new();
-    let mut cuckoo = cuckoo_hash::CuckooHash::build_cuckoo_hash(8192,4,2000);
-    //let mut sparseSketchArray = cuckoo_hash::CuckooHash::build_cuckoo_hash(8192,4,2000);
-    let mut sparseSketchArray = cuckoo_hash::CuckooHash::build_cuckoo_hash(4096,8,2000);
+    let mut cuckoo = cuckoo_hash::CuckooHash::build_cuckoo_hash(rows,slots,tables,2000);
+    let mut sparseSketchArray = cuckoo_hash::CuckooHash::build_cuckoo_hash(rows,slots,tables,2000);
     let mut first_packet=true;
     let mut epoch=0;
     let mut t0=0.0;
     let mut num_packets = 0;
     let mut FlowIDcounter:u32 = 0;
     let mut num_insertions = 0;
-    let mut num_m1_insertions = 0;
+    let mut max_num_insertions = 0;
+    let mut num_m0_insertions = 0;
 
 
-    println!("stat:\tEpoch\tpackets\tflows\tinsertions\t{}",m);
+    println!("stat:\tEpoch\tpackets\tflows\tTotKick\tTriggeredKicks\tmax kick\t{}",m);
+    println!("plot hll:\tEpoch\tBaseline\tSPADA-CHT\tSPADA-qCHT");
 
 
     file.read_to_end(&mut buffer).unwrap();
@@ -252,8 +275,15 @@ fn main() {
                             println!("#packets {}", num_packets);
                             println!("#flows {}", hashmap.len());
                             println!("#insertions {}", num_insertions);
-                            println!("#insertions >1 {}", num_m1_insertions);
-                            println!("stat:\t{}\t{}\t{}\t{}\t{}",epoch,num_packets,hashmap.len(),num_insertions,num_m1_insertions);
+                            println!("#insertions >0 {}", num_m0_insertions);
+                            println!("max #insertions {}", max_num_insertions);
+                            println!("loads {} {}", cuckoo.load(),sparseSketchArray.load());
+                            println!("stat:\t{}\t{}\t{}\t{}\t{}\t{}",epoch,num_packets,hashmap.len(),num_insertions,num_m0_insertions,max_num_insertions);
+                            print!("plot hll:\t{}\t{}",epoch,hashmap.len()*(120+5*2u32.pow(m) as usize)/8192);
+                            //suppose 16 bits for the FlowId + 5 for the hll value
+                            print!("\t{}",(hashmap.len()*120+sparseSketchArray.len()*(16+5+m as usize))/8192);
+                            //suppose 4 tables of 14 bits to store (FlowId+Idx + the hll value)
+                            println!("\t{}",(hashmap.len()*120+sparseSketchArray.len()*(2+5+m as usize))/8192);
                             
                             
                             hashmap.clear();
@@ -262,7 +292,8 @@ fn main() {
                             println!("new epoch: [{}] ", epoch);
                             num_packets =0;
                             num_insertions =0;
-                            num_m1_insertions =0;
+                            num_m0_insertions =0;
+                            max_num_insertions =0;
                             FlowIDcounter=0;
                         }
 
@@ -275,34 +306,35 @@ fn main() {
                         //println!(" key {:?} ", key);
 
 
-                        let FlowID; 
+                        let flow_id; 
                         if cuckoo.check(key) { //just update
                             let value:(u32,u32) = cuckoo.get_key_value(key).unwrap(); 
                             cuckoo.update(key,(value.0,value.1+1)); 
-                            FlowID=value.0;
+                            flow_id=value.0;
                         }
                         else { //first insertion
                             let r=cuckoo.insert(key,(FlowIDcounter,1)); 
-                            if (r==-1) {println!("ERROR in cuckoo insert"); exit(-1);}
-                            FlowID=FlowIDcounter;
+                            if r==-1 {println!("ERROR in cuckoo insert"); exit(-1);}
+                            flow_id=FlowIDcounter;
                             FlowIDcounter +=1;
                         }
 
                         //insertion in second data structure (SparseSketchArray)
                         // (FlowID,index) for an HLL with m bins
                         let (index,leading_zeros)=compute_bin_prefix_pair(l3_packet.destination(),m);
-                        if sparseSketchArray.check((FlowID,index)) { //just update
-                            let value:u32 = sparseSketchArray.get_key_value((FlowID,index)).unwrap(); 
+                        if sparseSketchArray.check((flow_id,index)) { //just update
+                            let value:u32 = sparseSketchArray.get_key_value((flow_id,index)).unwrap(); 
 
                             //hll update
                             if leading_zeros > value { 
-                                sparseSketchArray.update((FlowID,index),leading_zeros); 
+                                sparseSketchArray.update((flow_id,index),leading_zeros); 
                             }
                         }
                         else { //first insertion
-                            let ins = sparseSketchArray.insert((FlowID,index), leading_zeros); 
+                            let ins = sparseSketchArray.insert((flow_id,index), leading_zeros); 
                             num_insertions +=ins;
-                            if ins>1 { num_m1_insertions +=1;}
+                            max_num_insertions =max(max_num_insertions,ins);
+                            if ins>0 { num_m0_insertions +=1;}
                             //println!("INS={}",ins);
                             if ins<0 {
                                 println!("ERROR in SparseArray insert"); 
@@ -319,7 +351,7 @@ fn main() {
     println!("#packets {}", num_packets);
     println!("#flows {}", hashmap.len());
     println!("#insertions {}", num_insertions);
-    println!("#insertions >1 {}", num_m1_insertions);
+    println!("#insertions >1 {}", num_m0_insertions);
     /*for (k,v) in &hashmap {
         println!("TRUE k: {:?} v: {}",k,v);
         println!("in cuckoo we have: {:?} {:?}",k,cuckoo.get_key_value(*k));
