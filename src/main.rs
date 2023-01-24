@@ -70,25 +70,30 @@ fn main() {
              .long("rows")
              .takes_value(true)
              .default_value("16384")
-             .help("use r rows for the cukoo hashing"))
+             .help("use r rows for the cuckoo hashing"))
         .arg(Arg::new("s")
              .short('s')
              .long("slots")
              .takes_value(true)
              .default_value("1")
-             .help("use s slots for the cukoo hashing"))
+             .help("use s slots for the cuckoo hashing"))
         .arg(Arg::new("t")
              .short('t')
              .long("tables")
              .takes_value(true)
              .default_value("4")
-             .help("use t Tables for the cukoo hashing"))
+             .help("use t Tables for the cuckoo hashing"))
         .arg(Arg::new("epoch_time")
              .short('e')
              .long("epoch")
              .takes_value(true)
              .default_value("1.0")
              .help("time between epochs"))
+        .arg(Arg::new("DDSketch")
+             .short('d')
+             .long("ddsketch")
+             //.default_value("false")
+             .help("switch between HLL and DDSketch"))
         .get_matches();
     
     let filename = matches.value_of("filename").unwrap();
@@ -97,7 +102,10 @@ fn main() {
     let rows = matches.value_of("r").unwrap().parse::<usize>().unwrap();
     let tables = matches.value_of("t").unwrap().parse::<usize>().unwrap();
     let epoch_time=matches.value_of("epoch_time").unwrap().parse::<f64>().unwrap();
-    println!("parameters are: -f {:?} -m {:?} -e {:?} -s {:?} -r {:?} -t {:?}", filename, m, epoch_time,slots,rows,tables);
+    let ddsketch=matches.is_present("DDSketch");
+    
+    
+    println!("parameters are: -f {:?} -m {:?} -e {:?} -s {:?} -r {:?} -t {:?} -d {:?}", filename, m, epoch_time,slots,rows,tables,ddsketch);
 
 
 
@@ -119,7 +127,7 @@ fn main() {
 
 
     println!("stat:\tEpoch\tpackets\tflows\tTotKick\tTriggeredKicks\tmax kick\t{}",m);
-    println!("plot hll:\tEpoch\tBaseline\tSPADA-CHT\tSPADA-qCHT");
+    println!("plot hll:\tEpoch\tBaseline\tSPADA-CHT\tSPADA-qCHT\tpIBLT");
 
 
     file.read_to_end(&mut buffer).unwrap();
@@ -283,7 +291,10 @@ fn main() {
                             //suppose 16 bits for the FlowId + 5 for the hll value
                             print!("\t{}",(hashmap.len()*120+sparseSketchArray.len()*(16+5+m as usize))/8192);
                             //suppose 4 tables of 14 bits to store (FlowId+Idx + the hll value)
-                            println!("\t{}",(hashmap.len()*120+sparseSketchArray.len()*(2+5+m as usize))/8192);
+                            print!("\t{}",(hashmap.len()*120+sparseSketchArray.len()*(2+5+m as usize))/8192);
+                            println!("\tN/A");
+                            //suppose that we can use pIBLT with 3 tables of 5 bits to store the hll value + 64Kbits (8KB) for the bitmap
+                            //println!("\t{}",(hashmap.len()*120+5*sparseSketchArray.len())/8192+8);
                             
                             
                             hashmap.clear();
@@ -300,8 +311,17 @@ fn main() {
 
                         //insertion in first data structure (Key2IDCH)
                         num_packets += 1;
-                        let values = hashmap.get(&key).unwrap_or(&0).clone(); 
-                        hashmap.insert(key,values+1);
+                        let mut iat=0.0;
+                        if let Some(v)= hashmap.get(&key) {
+                            hashmap.insert(key,ts);
+                            iat=ts-v;
+                        } 
+                        else {
+                            hashmap.insert(key,ts);
+                            if ddsketch {
+                                continue;
+                            }
+                        }
                         //print!("{} ", ts);
                         //println!(" key {:?} ", key);
 
@@ -321,16 +341,27 @@ fn main() {
 
                         //insertion in second data structure (SparseSketchArray)
                         // (FlowID,index) for an HLL with m bins
-                        let (index,leading_zeros)=compute_bin_prefix_pair(l3_packet.destination(),m);
+                        
+                        let (index,leading_zeros)= if ddsketch {
+                                (compute_bucket_index(iat,m),1)
+                            } 
+                            else {
+                                compute_bin_prefix_pair(l3_packet.destination(),m)
+                            };
+
                         if sparseSketchArray.check((flow_id,index)) { //just update
                             let value:u32 = sparseSketchArray.get_key_value((flow_id,index)).unwrap(); 
 
-                            //hll update
+                            if ddsketch {
+                                sparseSketchArray.update((flow_id,index),value+1); 
+                            }
+                            else //hll update
                             if leading_zeros > value { 
                                 sparseSketchArray.update((flow_id,index),leading_zeros); 
                             }
                         }
                         else { //first insertion
+                            //ddsketch/hll update
                             let ins = sparseSketchArray.insert((flow_id,index), leading_zeros); 
                             num_insertions +=ins;
                             max_num_insertions =max(max_num_insertions,ins);
@@ -341,6 +372,9 @@ fn main() {
                                 exit(-1);
                             }
                         }
+
+
+
                         //println!("k: {:?} {:?} v: {:?}",key,l3_packet.destination(),(FlowID,index,leading_zeros));
                     }
                 }
