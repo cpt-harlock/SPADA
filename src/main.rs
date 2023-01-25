@@ -2,6 +2,7 @@
 //use spada::cms;
 use spada::cuckoo_hash;
 use clap::{Arg, Command};
+//use std::intrinsics::log2f64;
 use std::process::exit;
 use core::cmp::max;
 
@@ -23,6 +24,17 @@ pub use std::io::Write;
 use std::hash::{Hash,BuildHasher,Hasher};
 use hash32::Murmur3Hasher;
 use hash32::BuildHasherDefault;
+
+
+
+fn compute_bucket_index(iat:f64,m:u32) -> u32 {
+    let min:f64=1e-6;
+    let max:f64=1e-3;
+    let num_buckets=(1<<m) as f64;
+    let gamma=(max/min).powf(1.0/num_buckets);
+    let min_index=(min.log2()/gamma.log2()).ceil() as u32;
+    min_index+(iat.log2()/gamma.log2()).ceil() as u32
+}
 
 fn compute_bin_prefix_pair<T: Hash>(value: T, prefix_bit_length:u32) -> (u32, u32) {
     let mut s: Murmur3Hasher = BuildHasherDefault::default().build_hasher();
@@ -270,7 +282,13 @@ fn main() {
 
                         //epoch reset and print
                         //let key  = (l3_packet.source(), l3_packet.destination(), proto, src_port, dst_port);
-                        let key  = l3_packet.source(); //, l3_packet.destination(), proto, src_port, dst_port);
+                        let key  = if ddsketch {
+                                (l3_packet.source(), l3_packet.destination(), proto, src_port, dst_port)
+                            }
+                            else 
+                            {
+                                (l3_packet.source(),l3_packet.source(),0 ,0,0)
+                            };
                         if first_packet {
                             t0=ts; 
                             first_packet=false;
@@ -287,15 +305,25 @@ fn main() {
                             println!("max #insertions {}", max_num_insertions);
                             println!("loads {} {}", cuckoo.load(),sparseSketchArray.load());
                             println!("stat:\t{}\t{}\t{}\t{}\t{}\t{}",epoch,num_packets,hashmap.len(),num_insertions,num_m0_insertions,max_num_insertions);
-                            print!("plot hll:\t{}\t{}",epoch,hashmap.len()*(120+5*2u32.pow(m) as usize)/8192);
-                            //suppose 16 bits for the FlowId + 5 for the hll value
-                            print!("\t{}",(hashmap.len()*120+sparseSketchArray.len()*(16+5+m as usize))/8192);
-                            //suppose 4 tables of 14 bits to store (FlowId+Idx + the hll value)
-                            print!("\t{}",(hashmap.len()*120+sparseSketchArray.len()*(2+5+m as usize))/8192);
-                            println!("\tN/A");
-                            //suppose that we can use pIBLT with 3 tables of 5 bits to store the hll value + 64Kbits (8KB) for the bitmap
-                            //println!("\t{}",(hashmap.len()*120+5*sparseSketchArray.len())/8192+8);
                             
+                            
+                            if ddsketch {
+                                print!("plot dds:\t{}\t{}",epoch,hashmap.len()*(104+8*2u32.pow(m) as usize)/8192);
+                                //suppose 16 bits for the FlowId + 8 for the bucket value
+                                print!("\t{}",(hashmap.len()*120+sparseSketchArray.len()*(16+8+m as usize))/8192);
+                                //suppose 4 tables of 14 bits to store (FlowId+Idx + the dds value)
+                                print!("\t{}",(hashmap.len()*120+sparseSketchArray.len()*(2+8+m as usize))/8192);
+                                //suppose that we can use pIBLT with 3 tables of 8 bits to store the dds value + 64K*2^m bits (2^m*8KB) for the bitmap
+                                println!("\t{}",(hashmap.len()*120+8*sparseSketchArray.len())/8192+8*(1<<m));
+                            }
+                            else {
+                                print!("plot hll:\t{}\t{}",epoch,hashmap.len()*(32+5*2u32.pow(m) as usize)/8192);
+                                //suppose 16 bits for the FlowId + 5 for the hll value
+                                print!("\t{}",(hashmap.len()*32+sparseSketchArray.len()*(16+5+m as usize))/8192);
+                                //suppose 4 tables of 14 bits to store (FlowId+Idx + the hll value)
+                                print!("\t{}",(hashmap.len()*32+sparseSketchArray.len()*(2+5+m as usize))/8192);
+                                println!("\tN/A");
+                            }
                             
                             hashmap.clear();
                             cuckoo.clear();
@@ -312,9 +340,9 @@ fn main() {
                         //insertion in first data structure (Key2IDCH)
                         num_packets += 1;
                         let mut iat=0.0;
-                        if let Some(v)= hashmap.get(&key) {
-                            hashmap.insert(key,ts);
-                            iat=ts-v;
+                        if let Some(v)= hashmap.get_mut(&key) {
+                            iat=ts-*v;
+                            *v=ts;
                         } 
                         else {
                             hashmap.insert(key,ts);
