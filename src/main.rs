@@ -2,6 +2,7 @@
 //use spada::cms;
 use spada::cuckoo_hash;
 use clap::{Arg, Command};
+use std::u32::MAX;
 //use std::intrinsics::log2f64;
 use std::process::exit;
 use core::cmp::max;
@@ -137,7 +138,11 @@ fn main() {
     let mut max_num_insertions = 0;
     let mut num_m0_insertions = 0;
 
-
+    let mut num=0;
+    let mut min=[MAX;10];
+    let mut max=[0u32;10];
+    let mut tot=[0u32;10];
+    
     println!("stat:\tEpoch\tpackets\tflows\tTotKick\tTriggeredKicks\tmax kick\t{}",m);
     println!("plot hll:\tEpoch\tBaseline\tSPADA-CHT\tSPADA-qCHT\tpIBLT");
 
@@ -306,22 +311,50 @@ fn main() {
                             println!("loads {} {}", cuckoo.load(),sparseSketchArray.load());
                             println!("stat:\t{}\t{}\t{}\t{}\t{}\t{}",epoch,num_packets,hashmap.len(),num_insertions,num_m0_insertions,max_num_insertions);
                             
-                            
+                            num +=1;
                             if ddsketch {
-                                print!("plot dds:\t{}\t{}",epoch,hashmap.len()*(104+8*2u32.pow(m) as usize)/8192);
+                                let value=hashmap.len()*(104+8*2u32.pow(m) as usize)/8192;
+                                min[0] = min[0].min(value as u32);
+                                max[0] = max[0].max(value as u32);
+                                tot[0] += value  as u32;
+                                print!("plot dds:\t{}\t{}",epoch,value);
                                 //suppose 16 bits for the FlowId + 8 for the bucket value
-                                print!("\t{}",(hashmap.len()*120+sparseSketchArray.len()*(16+8+m as usize))/8192);
+                                let value =(hashmap.len()*120+sparseSketchArray.len()*(16+8+m as usize))/8192;
+                                min[1] = min[1].min(value as u32);
+                                max[1] = max[1].max(value as u32);
+                                tot[1] += value as u32;
+                                print!("\t{}",value);
                                 //suppose 4 tables of 14 bits to store (FlowId+Idx + the dds value)
-                                print!("\t{}",(hashmap.len()*120+sparseSketchArray.len()*(2+8+m as usize))/8192);
+                                let value =(hashmap.len()*120+sparseSketchArray.len()*(2+8+m as usize))/8192;
+                                min[2] = min[2].min(value as u32);
+                                max[2] = max[2].max(value as u32);
+                                tot[2] += value as u32;
+                                print!("\t{}",value);
                                 //suppose that we can use pIBLT with 3 tables of 8 bits to store the dds value + 64K*2^m bits (2^m*8KB) for the bitmap
-                                println!("\t{}",(hashmap.len()*120+8*sparseSketchArray.len())/8192+8*(1<<m));
+                                let value=(hashmap.len()*120+8*sparseSketchArray.len())/8192+8*(1<<m);
+                                min[3] = min[3].min(value as u32);
+                                max[3] = max[3].max(value as u32);
+                                tot[3] += value as u32;
+                                println!("\t{}",value);
                             }
                             else {
-                                print!("plot hll:\t{}\t{}",epoch,hashmap.len()*(32+5*2u32.pow(m) as usize)/8192);
+                                let value=hashmap.len()*(32+5*2u32.pow(m) as usize)/8192;
+                                min[0] = min[0].min(value as u32);
+                                max[0] = max[0].max(value as u32);
+                                tot[0] += value  as u32;
+                                print!("plot hll:\t{}\t{}",epoch,value);
                                 //suppose 16 bits for the FlowId + 5 for the hll value
-                                print!("\t{}",(hashmap.len()*32+sparseSketchArray.len()*(16+5+m as usize))/8192);
+                                let value =(hashmap.len()*32+sparseSketchArray.len()*(16+5+m as usize))/8192;
+                                min[1] = min[1].min(value as u32);
+                                max[1] = max[1].max(value as u32);
+                                tot[1] += value  as u32;
+                                print!("\t{}",value);
                                 //suppose 4 tables of 14 bits to store (FlowId+Idx + the hll value)
-                                print!("\t{}",(hashmap.len()*32+sparseSketchArray.len()*(2+5+m as usize))/8192);
+                                let value=(hashmap.len()*32+sparseSketchArray.len()*(2+5+m as usize))/8192;
+                                min[2] = min[2].min(value as u32);
+                                max[2] = max[2].max(value as u32);
+                                tot[2] += value  as u32;
+                                print!("\t{}",value); 
                                 println!("\tN/A");
                             }
                             
@@ -392,7 +425,7 @@ fn main() {
                             //ddsketch/hll update
                             let ins = sparseSketchArray.insert((flow_id,index), leading_zeros); 
                             num_insertions +=ins;
-                            max_num_insertions =max(max_num_insertions,ins);
+                            max_num_insertions =max_num_insertions.max(ins);
                             if ins>0 { num_m0_insertions +=1;}
                             //println!("INS={}",ins);
                             if ins<0 {
@@ -410,10 +443,25 @@ fn main() {
         },
         _ => { println!("error capture"); }
     }
+    
+    
+    
     println!("#packets {}", num_packets);
     println!("#flows {}", hashmap.len());
     println!("#insertions {}", num_insertions);
     println!("#insertions >1 {}", num_m0_insertions);
+    if ddsketch {
+        println!("plot dds \t min:\t{}\t{}\t{}\t{}",min[0],min[1],min[2],min[3]);
+        println!("plot dds \t ave:\t{}\t{}\t{}\t{}",tot[0]/num,tot[1]/num,tot[2]/num,tot[3]/num);
+        println!("plot dds \t max:\t{}\t{}\t{}\t{}",max[0],max[1],max[2],max[3]);
+        
+    }
+    else {
+        println!("plot hll \t min:\t{}\t{}\t{}\tN/A",min[0],min[1],min[2]);
+        println!("plot hll \t ave:\t{}\t{}\t{}\tN/A",tot[0]/num,tot[1]/num,tot[2]/num);
+        println!("plot hll \t max:\t{}\t{}\t{}\tN/A",max[0],max[1],max[2]);
+        
+    }       
     /*for (k,v) in &hashmap {
         println!("TRUE k: {:?} v: {}",k,v);
         println!("in cuckoo we have: {:?} {:?}",k,cuckoo.get_key_value(*k));
