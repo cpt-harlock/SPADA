@@ -127,8 +127,8 @@ fn main() {
     let mut file = File::open(filename).unwrap();
     let mut buffer = Vec::new();
     let mut hashmap = std::collections::HashMap::new();
-    let mut cuckoo = cuckoo_hash::CuckooHash::build_cuckoo_hash(rows,slots,tables,2000);
-    let mut sparseSketchArray = cuckoo_hash::CuckooHash::build_cuckoo_hash(rows,slots,tables,2000);
+    let mut cuckoo = cuckoo_hash::CuckooHash::<(u32,u32)>::build_cuckoo_hash(rows,tables,slots,16,1,2000);
+    let mut sparseSketchArray = cuckoo_hash::CuckooHash::<u32>::build_cuckoo_hash(rows,tables,slots,16,1,2000);
     let mut first_packet=true;
     let mut epoch=0;
     let mut t0=0.0;
@@ -308,7 +308,7 @@ fn main() {
                             println!("#insertions {}", num_insertions);
                             println!("#insertions >0 {}", num_m0_insertions);
                             println!("max #insertions {}", max_num_insertions);
-                            println!("loads {} {}", cuckoo.load(),sparseSketchArray.load());
+                            println!("loads {} {}", cuckoo.get_occupancy(),sparseSketchArray.get_occupancy());
                             println!("stat:\t{}\t{}\t{}\t{}\t{}\t{}",epoch,num_packets,hashmap.len(),num_insertions,num_m0_insertions,max_num_insertions);
                             
                             num +=1;
@@ -319,19 +319,19 @@ fn main() {
                                 tot[0] += value  as u32;
                                 print!("plot dds:\t{}\t{}",epoch,value);
                                 //suppose 16 bits for the FlowId + 8 for the bucket value
-                                let value =(hashmap.len()*120+sparseSketchArray.len()*(16+8+m as usize))/8192;
+                                let value =(hashmap.len()*120+sparseSketchArray.get_total_bins_count()*(16+8+m as usize))/8192;
                                 min[1] = min[1].min(value as u32);
                                 max[1] = max[1].max(value as u32);
                                 tot[1] += value as u32;
                                 print!("\t{}",value);
                                 //suppose 4 tables of 14 bits to store (FlowId+Idx + the dds value)
-                                let value =(hashmap.len()*120+sparseSketchArray.len()*(2+8+m as usize))/8192;
+                                let value =(hashmap.len()*120+sparseSketchArray.get_total_bins_count()*(2+8+m as usize))/8192;
                                 min[2] = min[2].min(value as u32);
                                 max[2] = max[2].max(value as u32);
                                 tot[2] += value as u32;
                                 print!("\t{}",value);
                                 //suppose that we can use pIBLT with 3 tables of 8 bits to store the dds value + 64K*2^m bits (2^m*8KB) for the bitmap
-                                let value=(hashmap.len()*120+8*sparseSketchArray.len())/8192+8*(1<<m);
+                                let value=(hashmap.len()*120+8*sparseSketchArray.get_total_bins_count())/8192+8*(1<<m);
                                 min[3] = min[3].min(value as u32);
                                 max[3] = max[3].max(value as u32);
                                 tot[3] += value as u32;
@@ -344,13 +344,13 @@ fn main() {
                                 tot[0] += value  as u32;
                                 print!("plot hll:\t{}\t{}",epoch,value);
                                 //suppose 16 bits for the FlowId + 5 for the hll value
-                                let value =(hashmap.len()*32+sparseSketchArray.len()*(16+5+m as usize))/8192;
+                                let value =(hashmap.len()*32+sparseSketchArray.get_total_bins_count()*(16+5+m as usize))/8192;
                                 min[1] = min[1].min(value as u32);
                                 max[1] = max[1].max(value as u32);
                                 tot[1] += value  as u32;
                                 print!("\t{}",value);
                                 //suppose 4 tables of 14 bits to store (FlowId+Idx + the hll value)
-                                let value=(hashmap.len()*32+sparseSketchArray.len()*(2+5+m as usize))/8192;
+                                let value=(hashmap.len()*32+sparseSketchArray.get_total_bins_count()*(2+5+m as usize))/8192;
                                 min[2] = min[2].min(value as u32);
                                 max[2] = max[2].max(value as u32);
                                 tot[2] += value  as u32;
@@ -388,14 +388,19 @@ fn main() {
 
 
                         let flow_id; 
-                        if cuckoo.check(key) { //just update
-                            let value:(u32,u32) = cuckoo.get_key_value(key).unwrap(); 
-                            cuckoo.update(key,(value.0,value.1+1)); 
+                        let mut key_u128: u128 = 0;
+                        key_u128 = u32::from_ne_bytes(key.0.octets()) as u128;
+                        key_u128 = (key_u128 << 32) | u32::from_ne_bytes(key.1.octets()) as u128;
+                        key_u128 = (key_u128 << 16) | key.3 as u32 as u128;
+                        key_u128 = (key_u128 << 16) | key.4 as u32 as u128;
+                        key_u128 = (key_u128 << 8) | key.2 as u32 as u128;
+                        if let Some(value) = cuckoo.get_key_value(key_u128) { //just update
+                            cuckoo.update(key_u128,(value.0,value.1+1)); 
                             flow_id=value.0;
                         }
                         else { //first insertion
-                            let r=cuckoo.insert(key,(FlowIDcounter,1)); 
-                            if r==-1 {println!("ERROR in cuckoo insert"); exit(-1);}
+                            let r=cuckoo.insert(key_u128,(FlowIDcounter,1)); 
+                            if !r {println!("ERROR in cuckoo insert"); exit(-1);}
                             flow_id=FlowIDcounter;
                             FlowIDcounter +=1;
                         }
@@ -410,25 +415,26 @@ fn main() {
                                 compute_bin_prefix_pair(l3_packet.destination(),m)
                             };
 
-                        if sparseSketchArray.check((flow_id,index)) { //just update
-                            let value:u32 = sparseSketchArray.get_key_value((flow_id,index)).unwrap(); 
-
+                        //TODO: generic also for key
+                        key_u128 = flow_id as u128;
+                        key_u128 = key_u128 << 32 | index as u128;
+                        if let Some(value) = sparseSketchArray.get_key_value(key_u128) { //just update
                             if ddsketch {
-                                sparseSketchArray.update((flow_id,index),value+1); 
+                                sparseSketchArray.update(key_u128,value+1); 
                             }
                             else //hll update
                             if leading_zeros > value { 
-                                sparseSketchArray.update((flow_id,index),leading_zeros); 
+                                sparseSketchArray.update(key_u128,leading_zeros); 
                             }
                         }
                         else { //first insertion
                             //ddsketch/hll update
-                            let ins = sparseSketchArray.insert((flow_id,index), leading_zeros); 
-                            num_insertions +=ins;
-                            max_num_insertions =max_num_insertions.max(ins);
-                            if ins>0 { num_m0_insertions +=1;}
+                            let ins = sparseSketchArray.insert(key_u128, leading_zeros); 
+                            //num_insertions +=ins;
+                            //max_num_insertions =max_num_insertions.max(ins);
+                            //if ins>0 { num_m0_insertions +=1;}
                             //println!("INS={}",ins);
-                            if ins<0 {
+                            if !ins {
                                 println!("ERROR in SparseArray insert"); 
                                 exit(-1);
                             }
