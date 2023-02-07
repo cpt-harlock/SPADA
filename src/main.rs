@@ -96,6 +96,12 @@ fn main() {
              .takes_value(true)
              .default_value("4")
              .help("use t Tables for the cuckoo hashing"))
+        .arg(Arg::new("d")
+             .short('d')
+             .long("datapath")
+             .takes_value(true)
+             .default_value("1")
+             .help("use d datapath for recirculation"))
         .arg(Arg::new("epoch_time")
              .short('e')
              .long("epoch")
@@ -103,7 +109,7 @@ fn main() {
              .default_value("1.0")
              .help("time between epochs"))
         .arg(Arg::new("DDSketch")
-             .short('d')
+             .short('D')
              .long("ddsketch")
              //.default_value("false")
              .help("switch between HLL and DDSketch"))
@@ -114,11 +120,12 @@ fn main() {
     let slots = matches.value_of("s").unwrap().parse::<usize>().unwrap();
     let rows = matches.value_of("r").unwrap().parse::<usize>().unwrap();
     let tables = matches.value_of("t").unwrap().parse::<usize>().unwrap();
+    let datapath = matches.value_of("d").unwrap().parse::<usize>().unwrap();
     let epoch_time=matches.value_of("epoch_time").unwrap().parse::<f64>().unwrap();
     let ddsketch=matches.is_present("DDSketch");
     
     
-    println!("parameters are: -f {:?} -m {:?} -e {:?} -s {:?} -r {:?} -t {:?} -d {:?}", filename, m, epoch_time,slots,rows,tables,ddsketch);
+    println!("parameters are: -f {:?} -m {:?} -e {:?} -s {:?} -r {:?} -t {:?} -d {:?} -D {:?}", filename, m, epoch_time,slots,rows,tables,datapath,ddsketch);
 
 
 
@@ -127,8 +134,8 @@ fn main() {
     let mut file = File::open(filename).unwrap();
     let mut buffer = Vec::new();
     let mut hashmap = std::collections::HashMap::new();
-    let mut cuckoo = cuckoo_hash::CuckooHash::<(u32,u32)>::build_cuckoo_hash(rows,tables,slots,16,1,2000);
-    let mut sparseSketchArray = cuckoo_hash::CuckooHash::<u32>::build_cuckoo_hash(rows,tables,slots,16,1,2000);
+    let mut cuckoo = cuckoo_hash::CuckooHash::<u128,(u32,u32)>::build_cuckoo_hash(rows,tables,slots,16,datapath,2000);
+    let mut sparseSketchArray = cuckoo_hash::CuckooHash::<u128,u32>::build_cuckoo_hash(rows,tables,slots,16,datapath,2000);
     let mut first_packet=true;
     let mut epoch=0;
     let mut t0=0.0;
@@ -143,7 +150,7 @@ fn main() {
     let mut max=[0u32;10];
     let mut tot=[0u32;10];
     
-    println!("stat:\tEpoch\tpackets\tflows\tTotKick\tTriggeredKicks\tmax kick\t{}",m);
+    println!("stat:\tEpoch\tpackets\tflows\tRecirculations\tload\t{}",m);
     println!("plot hll:\tEpoch\tBaseline\tSPADA-CHT\tSPADA-qCHT\tpIBLT");
 
 
@@ -303,64 +310,70 @@ fn main() {
                         if ts>epoch_time {
                             epoch +=1;
                             ts -=epoch_time;
+                            num_insertions=sparseSketchArray.get_recirculation_loops();
                             println!("#packets {}", num_packets);
                             println!("#flows {}", hashmap.len());
                             println!("#insertions {}", num_insertions);
                             println!("#insertions >0 {}", num_m0_insertions);
                             println!("max #insertions {}", max_num_insertions);
                             println!("loads {} {}", cuckoo.get_occupancy(),sparseSketchArray.get_occupancy());
-                            println!("stat:\t{}\t{}\t{}\t{}\t{}\t{}",epoch,num_packets,hashmap.len(),num_insertions,num_m0_insertions,max_num_insertions);
+                            println!("stat:\t{}\t{}\t{}\t{}\t{}",epoch,num_packets,hashmap.len(),num_insertions,sparseSketchArray.get_occupancy());
+                            tot[0] += num_insertions  as u32;
+                            tot[5] += num_packets  as u32;
                             
                             num +=1;
+                            // I use 111/819200 to say 90% load factor, size in KB (8192b) 
                             if ddsketch {
-                                let value=hashmap.len()*(104+8*2u32.pow(m) as usize)/8192;
-                                min[0] = min[0].min(value as u32);
-                                max[0] = max[0].max(value as u32);
-                                tot[0] += value  as u32;
-                                print!("plot dds:\t{}\t{}",epoch,value);
-                                //suppose 16 bits for the FlowId + 8 for the bucket value
-                                let value =(hashmap.len()*120+sparseSketchArray.get_total_bins_count()*(16+8+m as usize))/8192;
+                                let value=111*hashmap.len()*(104+8*2u32.pow(m) as usize)/819200;
                                 min[1] = min[1].min(value as u32);
                                 max[1] = max[1].max(value as u32);
-                                tot[1] += value as u32;
-                                print!("\t{}",value);
-                                //suppose 4 tables of 14 bits to store (FlowId+Idx + the dds value)
-                                let value =(hashmap.len()*120+sparseSketchArray.get_total_bins_count()*(2+8+m as usize))/8192;
+                                tot[1] += value  as u32;
+                                print!("plot dds:\t{}\t{}",epoch,value);
+                                //suppose 16 bits for the FlowId + 8 for the bucket value
+                                let value =111*(hashmap.len()*120+sparseSketchArray.get_total_bins_count()*(16+8+m as usize))/819200;
                                 min[2] = min[2].min(value as u32);
                                 max[2] = max[2].max(value as u32);
                                 tot[2] += value as u32;
                                 print!("\t{}",value);
-                                //suppose that we can use pIBLT with 3 tables of 8 bits to store the dds value + 64K*2^m bits (2^m*8KB) for the bitmap
-                                let value=(hashmap.len()*120+8*sparseSketchArray.get_total_bins_count())/8192+8*(1<<m);
+                                //suppose 4 tables of 14 bits to store (FlowId+Idx + the dds value)
+                                let value =111*(hashmap.len()*120+sparseSketchArray.get_total_bins_count()*(2+8+m as usize))/819200;
                                 min[3] = min[3].min(value as u32);
                                 max[3] = max[3].max(value as u32);
                                 tot[3] += value as u32;
+                                print!("\t{}",value);
+                                //suppose that we can use pIBLT with 3 tables of 8 bits to store the dds value + 64K*2^m bits (2^m*8KB) for the bitmap
+                                let value=111*(hashmap.len()*120+8*sparseSketchArray.get_total_bins_count())/819200+8*(1<<m);
+                                min[4] = min[4].min(value as u32);
+                                max[4] = max[4].max(value as u32);
+                                tot[4] += value as u32;
                                 println!("\t{}",value);
                             }
                             else {
-                                let value=hashmap.len()*(32+5*2u32.pow(m) as usize)/8192;
-                                min[0] = min[0].min(value as u32);
-                                max[0] = max[0].max(value as u32);
-                                tot[0] += value  as u32;
-                                print!("plot hll:\t{}\t{}",epoch,value);
-                                //suppose 16 bits for the FlowId + 5 for the hll value
-                                let value =(hashmap.len()*32+sparseSketchArray.get_total_bins_count()*(16+5+m as usize))/8192;
+                                let value=111*hashmap.len()*(32+5*2u32.pow(m) as usize)/819200;
                                 min[1] = min[1].min(value as u32);
                                 max[1] = max[1].max(value as u32);
                                 tot[1] += value  as u32;
-                                print!("\t{}",value);
-                                //suppose 4 tables of 14 bits to store (FlowId+Idx + the hll value)
-                                let value=(hashmap.len()*32+sparseSketchArray.get_total_bins_count()*(2+5+m as usize))/8192;
+                                print!("plot hll:\t{}\t{}",epoch,value);
+                                //suppose 16 bits for the FlowId + 5 for the hll value
+                                let value =111*(hashmap.len()*32+sparseSketchArray.get_total_bins_count()*(16+5+m as usize))/819200;
                                 min[2] = min[2].min(value as u32);
                                 max[2] = max[2].max(value as u32);
                                 tot[2] += value  as u32;
+                                print!("\t{}",value);
+                                //suppose 4 tables of 14 bits to store (FlowId+Idx + the hll value)
+                                let value=111*(hashmap.len()*32+sparseSketchArray.get_total_bins_count()*(2+5+m as usize))/819200;
+                                min[3] = min[3].min(value as u32);
+                                max[3] = max[3].max(value as u32);
+                                tot[3] += value  as u32;
                                 print!("\t{}",value); 
                                 println!("\tN/A");
                             }
                             
                             hashmap.clear();
-                            cuckoo.clear();
-                            sparseSketchArray.clear();
+                            //cuckoo.clear();
+                            //sparseSketchArray.clear();
+                            cuckoo = cuckoo_hash::CuckooHash::<u128,(u32,u32)>::build_cuckoo_hash(rows,tables,slots,16,datapath,2000);
+                            sparseSketchArray = cuckoo_hash::CuckooHash::<u128,u32>::build_cuckoo_hash(rows,tables,slots,16,datapath,2000);
                             println!("new epoch: [{}] ", epoch);
                             num_packets =0;
                             num_insertions =0;
@@ -456,16 +469,24 @@ fn main() {
     println!("#flows {}", hashmap.len());
     println!("#insertions {}", num_insertions);
     println!("#insertions >1 {}", num_m0_insertions);
+    println!("stat: recirculations, packets \t{}\t{}",tot[0]/num,tot[5]/num);
     if ddsketch {
-        println!("plot dds \t min:\t{}\t{}\t{}\t{}",min[0],min[1],min[2],min[3]);
-        println!("plot dds \t ave:\t{}\t{}\t{}\t{}",tot[0]/num,tot[1]/num,tot[2]/num,tot[3]/num);
-        println!("plot dds \t max:\t{}\t{}\t{}\t{}",max[0],max[1],max[2],max[3]);
+        println!("plot dds \t min:\t{}\t{}\t{}\t{}",min[1],min[2],min[3],min[4]);
+        println!("plot dds \t ave:\t{}\t{}\t{}\t{}",tot[1]/num,tot[2]/num,tot[3]/num,tot[4]/num);
+        println!("plot dds \t max:\t{}\t{}\t{}\t{}",max[1],max[2],max[3],max[4]);
+        println!("plot dds \t [1]:\t{}\t{}\t{}",tot[1]/num,min[1],max[1]);
+        println!("plot dds \t [2]:\t{}\t{}\t{}",tot[2]/num,min[2],max[2]);
+        println!("plot dds \t [3]:\t{}\t{}\t{}",tot[3]/num,min[3],max[3]);
+        println!("plot dds \t [4]:\t{}\t{}\t{}",tot[4]/num,min[4],max[4]);
         
     }
     else {
-        println!("plot hll \t min:\t{}\t{}\t{}\tN/A",min[0],min[1],min[2]);
-        println!("plot hll \t ave:\t{}\t{}\t{}\tN/A",tot[0]/num,tot[1]/num,tot[2]/num);
-        println!("plot hll \t max:\t{}\t{}\t{}\tN/A",max[0],max[1],max[2]);
+        println!("plot hll \t min:\t{}\t{}\t{}\tN/A",min[1],min[2],min[3]);
+        println!("plot hll \t ave:\t{}\t{}\t{}\tN/A",tot[1]/num,tot[2]/num,tot[3]/num);
+        println!("plot hll \t max:\t{}\t{}\t{}\tN/A",max[1],max[2],max[3]);
+        println!("plot hll \t [1]:\t{}\t{}\t{}",tot[1]/num,min[1],max[1]);
+        println!("plot hll \t [2]:\t{}\t{}\t{}",tot[2]/num,min[2],max[2]);
+        println!("plot hll \t [3]:\t{}\t{}\t{}",tot[3]/num,min[3],max[3]);
         
     }       
     /*for (k,v) in &hashmap {
