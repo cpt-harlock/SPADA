@@ -118,24 +118,27 @@ impl <K: std::fmt::Debug + std::hash::Hash + std::cmp::PartialEq + std::clone::C
     }
 
     fn recirculate_condition(&self) -> bool {
-        //debug
-        //for i in 0..self.stash.len() {
-        //    println!("Stash {} len {}", i, self.stash[i].len());
-        //}
-        //println!("recirculate_condition {}", self.stash.iter().map(|v| { v.len() > 0}).reduce(|acc, v| { acc && v }).unwrap());
-        let stash_count_sum = self.stash.iter().map(|v| { v.len() }).reduce(|acc, v| { acc + v }).unwrap();
-        let all_stash_not_empty = self.stash.iter().map(|v| { v.len() > 0}).reduce(|acc, v| { acc && v }).unwrap();
-        return stash_count_sum >= self.stash_size - 1 || all_stash_not_empty;
+        let all_stash_half_full = self.stash.iter().map(|v| { v.len() > (self.stash_size/2)}).reduce(|acc, v| { acc && v }).unwrap();
+        let all_stash_threequarter_full = self.stash.iter().map(|v| { v.len() > ((self.stash_size*3)/4)}).reduce(|acc, v| { acc && v }).unwrap();
+        let all_stash_onequarter_full = self.stash.iter().map(|v| { v.len() > (self.stash_size/4)}).reduce(|acc, v| { acc && v }).unwrap();
+        let one_stash_onequarter_full = self.stash.iter().map(|v| { v.len() > (self.stash_size/4)}).reduce(|acc, v| { acc || v }).unwrap();
+        let one_stash_almost_full = self.stash.iter().map(|v| { v.len() == (self.stash_size - 1)}).reduce(|acc, v| { acc || v }).unwrap();
+        //return all_stash_half_full || one_stash_almost_full;
+        //return all_stash_threequarter_full || one_stash_almost_full;
+        //return all_stash_onequarter_full || one_stash_almost_full;
+        return one_stash_onequarter_full || one_stash_almost_full;
     }
 
     fn recirculate(&mut self) {
         //println!("into recirculation");
         let mut recirculation_counter = 0;
         let mut insert_into_stash = true;
-        while self.recirculate_condition() && recirculation_counter < self.insertion_loop_limit {
+        //while self.recirculate_condition() && recirculation_counter < self.insertion_loop_limit {
+        while self.recirculate_condition() {
             // sure that each stash contains at least one element 
             recirculation_counter += 1;
             for d in 0..self.datapath_count {
+                insert_into_stash = true;
                 if self.stash[d].len() == 0 {
                     continue;
                 }
@@ -426,24 +429,23 @@ impl <T: std::clone::Clone + std::cmp::PartialEq> QCuckooHash<T> {
     }
 
     fn recirculate_condition(&self) -> bool {
-        //debug
-        //for i in 0..self.stash.len() {
-        //    println!("Stash {} len {}", i, self.stash[i].len());
-        //}
-        //println!("recirculate_condition {}", self.stash.iter().map(|v| { v.len() > 0}).reduce(|acc, v| { acc && v }).unwrap());
-        let stash_count_sum = self.stash.iter().map(|v| { v.len() }).reduce(|acc, v| { acc + v }).unwrap();
-        let all_stash_not_empty = self.stash.iter().map(|v| { v.len() > 0}).reduce(|acc, v| { acc && v }).unwrap();
-        return stash_count_sum >= self.stash_size - 1 || all_stash_not_empty;
+        let all_stash_half_full = self.stash.iter().map(|v| { v.len() > (self.stash_size/2)}).reduce(|acc, v| { acc && v }).unwrap();
+        let all_stash_threequarter_full = self.stash.iter().map(|v| { v.len() > ((self.stash_size*3)/4)}).reduce(|acc, v| { acc && v }).unwrap();
+        let all_stash_onequarter_full = self.stash.iter().map(|v| { v.len() > (self.stash_size/4)}).reduce(|acc, v| { acc && v }).unwrap();
+        let one_stash_almost_full = self.stash.iter().map(|v| { v.len() == (self.stash_size - 1)}).reduce(|acc, v| { acc || v }).unwrap();
+        return all_stash_onequarter_full || one_stash_almost_full;
     }
 
     fn recirculate(&mut self) {
         //println!("into recirculation");
         let mut recirculation_counter = 0;
         let mut insert_into_stash = true;
-        while self.recirculate_condition() && recirculation_counter < self.insertion_loop_limit {
+        //while self.recirculate_condition() && recirculation_counter < self.insertion_loop_limit {
+        while self.recirculate_condition() {
             // sure that each stash contains at least one element 
             recirculation_counter += 1;
             for d in 0..self.datapath_count {
+                insert_into_stash = true;
                 if self.stash[d].len() == 0 {
                     continue;
                 }
