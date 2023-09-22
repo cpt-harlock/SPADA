@@ -1,15 +1,17 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
-use rand::Rng;
 use std::collections::HashMap;
-use std::collections::VecDeque;
 
 // for bins structure, first level of vectors represent different datapaths
 // for each datapath, we have a vector of hashmaps
+
+//#[derive(Iterator)]
+#[derive(Debug)]
 pub struct CuckooHash<K: std::fmt::Debug + std::hash::Hash + std::cmp::PartialEq + std::clone::Clone, T: std::clone::Clone + std::cmp::PartialEq> {
-    bins: Vec<Vec<HashMap<usize,Vec<(K,T)>>>>,
+    //#[into_iterator(owned, ref,  ref_mut)]
     stash: Vec<Vec<(K,T)>>,
+    bins: Vec<Vec<HashMap<usize,Vec<(K,T)>>>>,
     bins_count: usize,
     tables_count: usize,
     slot_count: usize,
@@ -20,8 +22,19 @@ pub struct CuckooHash<K: std::fmt::Debug + std::hash::Hash + std::cmp::PartialEq
     recirculation_counter: usize,
 }
 
-
-impl <K: std::fmt::Debug + std::hash::Hash + std::cmp::PartialEq + std::clone::Clone,T: std::clone::Clone+ std::cmp::PartialEq> CuckooHash<K,T> {
+impl <K: std::fmt::Debug + std::hash::Hash + std::cmp::PartialEq + std::clone::Clone,T: std::fmt::Debug + std::clone::Clone+ std::cmp::PartialEq> CuckooHash<K,T> {
+    pub fn iter(&self) -> impl Iterator<Item=&(K,T)> {
+        self.bins.iter()
+        .flatten()
+        .flatten()
+        .map(|x| {x.1})
+        .flatten()
+        .chain(
+            self.stash.iter()
+            .flatten()
+        )
+    }
+    
     pub fn build_cuckoo_hash(bins_count: usize, tables_count: usize, slot_count: usize, stash_size: usize, datapath_count: usize, insertion_loop_limit: usize) -> CuckooHash<K,T> {
         CuckooHash {
             bins: vec![ vec![HashMap::with_capacity(bins_count); tables_count]; datapath_count], 
@@ -40,6 +53,10 @@ impl <K: std::fmt::Debug + std::hash::Hash + std::cmp::PartialEq + std::clone::C
 
     pub fn get_recirculation_loops(&self) -> usize {
         self.recirculation_counter
+    }
+    
+    pub fn clear_recirculation_loops(&mut self) {
+        self.recirculation_counter=0;
     }
 
     pub fn debug_print(&self) {
@@ -123,10 +140,10 @@ impl <K: std::fmt::Debug + std::hash::Hash + std::cmp::PartialEq + std::clone::C
         let all_stash_onequarter_full = self.stash.iter().map(|v| { v.len() > (self.stash_size/4)}).reduce(|acc, v| { acc && v }).unwrap();
         let one_stash_onequarter_full = self.stash.iter().map(|v| { v.len() > (self.stash_size/4)}).reduce(|acc, v| { acc || v }).unwrap();
         let one_stash_almost_full = self.stash.iter().map(|v| { v.len() == (self.stash_size - 1)}).reduce(|acc, v| { acc || v }).unwrap();
-        //return all_stash_half_full || one_stash_almost_full;
+        return all_stash_half_full || one_stash_almost_full;
         //return all_stash_threequarter_full || one_stash_almost_full;
         //return all_stash_onequarter_full || one_stash_almost_full;
-        return one_stash_onequarter_full || one_stash_almost_full;
+        //return one_stash_onequarter_full || one_stash_almost_full;
     }
 
     fn recirculate(&mut self) {
@@ -242,6 +259,10 @@ impl <K: std::fmt::Debug + std::hash::Hash + std::cmp::PartialEq + std::clone::C
     }
 
     pub fn get_inserted_keys(&self) -> usize {
+        let mut stash_counter:usize=0;
+        for i in 0..self.stash.len() {
+            stash_counter += self.stash[i].len();
+        }
         let mut temp_counter = 0;
         for path in &self.bins { 
             for table in path {
@@ -250,7 +271,7 @@ impl <K: std::fmt::Debug + std::hash::Hash + std::cmp::PartialEq + std::clone::C
                 }
             }
         }
-        temp_counter
+        temp_counter+stash_counter
     }
 
     pub fn get_occupancy(&self) -> f32 {
