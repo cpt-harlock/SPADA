@@ -393,6 +393,8 @@ fn main() {
                                 let mut tot =0;
                                 let mut tot_sparse =0;
                                 let mut tot_count =0;
+                                let mut sparsity = 0.0;
+                                let total_buckets = 1<<m;
                                 for _v in cuckoo.iter() {
                                 //        println!("fid:{:?}",v);
                                     tot_count +=1;
@@ -413,12 +415,15 @@ fn main() {
                                             tot_sparse += count;
                                     }
                                     tot_count += count;
+                                    sparsity += (count as f64)/(total_buckets as f64);
                                 }
+                                sparsity /= (hashmap.len() as f64);
                                 let dense=hashmap.len()-sparse;
                                 println!("count: {}== {} =={}", tot,sparseSketchArray.get_inserted_keys(),sparsehashmap.len());
                                 println!("sparse: {} dense: {} ratio:{}", sparse,dense,(sparse as f32)/(hashmap.len() as f32));
                                 println!("sparse memory:  {}", 15*(sparse+dense)+4*tot_count);
                                 println!("oracle memory:  {}", 45*dense+15*sparse+4*tot_sparse);
+                                println!("average sparsity:  {}", sparsity);
                                 //if let Some(value) = sparseSketchArray.get_key_value(key_u128)  //just update
                             }
 
