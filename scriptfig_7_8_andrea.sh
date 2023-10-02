@@ -131,11 +131,11 @@ echo "Results parsed.";
 touch ./logs/avg_sparsities.txt
 
 # HLL
-cat ./logs/sparsity_MAWI1_m6_d1_HLL.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI1 m6 HLL sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
-cat ./logs/sparsity_MAWI1_m7_d1_HLL.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI1 m7 HLL sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
+# cat ./logs/sparsity_MAWI1_m6_d1_HLL.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI1 m6 HLL sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
+# cat ./logs/sparsity_MAWI1_m7_d1_HLL.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI1 m7 HLL sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
 
-cat ./logs/sparsity_MAWI2_m6_d1_HLL.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI2 m6 HLL sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
-cat ./logs/sparsity_MAWI2_m7_d1_HLL.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI2 m7 HLL sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
+# cat ./logs/sparsity_MAWI2_m6_d1_HLL.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI2 m6 HLL sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
+# cat ./logs/sparsity_MAWI2_m7_d1_HLL.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI2 m7 HLL sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
 
 cat ./logs/sparsity_CAIDA1_m6_d1_HLL.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI1 m6 HLL sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
 cat ./logs/sparsity_CAIDA1_m7_d1_HLL.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI1 m7 HLL sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
@@ -144,11 +144,11 @@ cat ./logs/sparsity_CAIDA2_m6_d1_HLL.txt | awk '{ sum += $3 } END { if (NR > 0) 
 cat ./logs/sparsity_CAIDA2_m7_d1_HLL.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI2 m7 HLL sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
 
 # DDSketch
-cat ./logs/sparsity_MAWI1_m5_d1_DDSketch.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI1 m5 DDSketch sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
-cat ./logs/sparsity_MAWI1_m6_d1_DDSketch.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI1 m6 DDSketch sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
+# cat ./logs/sparsity_MAWI1_m5_d1_DDSketch.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI1 m5 DDSketch sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
+# cat ./logs/sparsity_MAWI1_m6_d1_DDSketch.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI1 m6 DDSketch sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
 
-cat ./logs/sparsity_MAWI2_m5_d1_DDSketch.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI2 m5 DDSketch sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
-cat ./logs/sparsity_MAWI2_m6_d1_DDSketch.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI2 m6 DDSketch sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
+# cat ./logs/sparsity_MAWI2_m5_d1_DDSketch.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI2 m5 DDSketch sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
+# cat ./logs/sparsity_MAWI2_m6_d1_DDSketch.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI2 m6 DDSketch sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
 
 cat ./logs/sparsity_CAIDA1_m5_d1_DDSketch.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI1 m5 DDSketch sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
 cat ./logs/sparsity_CAIDA1_m6_d1_DDSketch.txt | awk '{ sum += $3 } END { if (NR > 0) print "MAWI1 m6 DDSketch sparsity: " sum / NR }' >> ./logs/avg_sparsities.txt;
@@ -166,5 +166,6 @@ gnuplot fig7.gp;
 gnuplot fig8.gp;
 
 echo "Plots saved.";
+
 
 
