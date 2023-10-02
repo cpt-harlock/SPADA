@@ -15,7 +15,7 @@ set xlabel offset character 0, -2, 0 font "" textcolor lt -1 norotate
 set xlabel offset 0,0.9
 set xrange [ * : * ] noreverse writeback
 set x2range [ * : * ] noreverse writeback
-set ylabel "Memory occupation [KB]" offset 1.5
+set ylabel "Memory occupation [MB]" offset 1.5
 set yrange [ * : * ] noreverse writeback
 set y2range [ * : * ] noreverse writeback
 set zrange [ * : * ] noreverse writeback
@@ -30,11 +30,11 @@ set key inside left Left reverse samplen 2
 #set key box opaque 
 
 plot \
-newhistogram "m=64", 'memory_hll_mawi.dat'\
+newhistogram "m=64", 'memory_hll.dat'\
 using "Standard":"Standard_min":"Standard_max":xtic(1) t "Baseline" lt 1  fs pattern 1,\
 '' u  "CHT":"CHT_min":"CHT_max"  t "SPADA-CHT" lt 2  fs pattern 2,\
 '' u  "qCHT":"qCHT_min":"qCHT_max" t "SPADA-qCHT"  lt 4  fs pattern 4,\
-newhistogram "m=128", 'memory_hll_mawi.dat'\
+newhistogram "m=128", 'memory_hll.dat'\
 using "Standard2":"Standard2_min":"Standard2_max":xtic(1)  not lt 1  fs pattern 1,\
 '' u  "CHT2":"CHT2_min":"CHT2_max"  not lt 2  fs pattern 2,\
 '' u  "qCHT2":"qCHT2_min":"qCHT2_max" not lt 4  fs pattern 4,\
