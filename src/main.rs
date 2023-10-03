@@ -351,7 +351,7 @@ fn main() {
                                 let overpr_n_s = ((n_s / load_pct) / tables as f32) as f32; // Overprovisioned to keep the load < load_pct
 
                                 // Baseline
-                                let mut value = overpr_n_s * (s_k + overpr_n_s.log2().ceil() + 2u32.pow(m) as f32 * s_c);
+                                let mut value = overpr_n_s * (s_k + (overpr_n_s * tables as f32).log2().ceil() + 2u32.pow(m) as f32 * s_c);
                                 value = value * tables as f32 / 8192 as f32;
                                 min[1] = min[1].min(value as u32);
                                 max[1] = max[1].max(value as u32);
@@ -361,7 +361,7 @@ fn main() {
                                 // SPADA - CHT. Suppose 16 bits for the FlowId + 8 for the bucket value
                                 let n_u = sparseSketchArray.get_total_bins_count() as f32 * sparseSketchArray.get_occupancy(); // n_u here is sparsity across *all* counters
                                 let overpr_n_u = ((n_u / load_pct) / tables as f32) as f32;
-                                value = overpr_n_s * (s_k + overpr_n_s.log2().ceil()) + overpr_n_u * (overpr_n_s.log2().ceil() + m as f32 + s_c);
+                                value = overpr_n_s * (s_k + (overpr_n_s * tables as f32).log2().ceil()) + overpr_n_u * ((overpr_n_s * tables as f32).log2().ceil() + m as f32 + s_c);
                                 value = value * tables as f32 / 8192 as f32;
                                 min[2] = min[2].min(value as u32);
                                 max[2] = max[2].max(value as u32);
@@ -370,7 +370,7 @@ fn main() {
 
                                 // SPADA - qCHT. Suppose 4 tables of 14 bits to store (FlowId+Idx + the dds value)
                                 let quotient = (overpr_n_s * 2u32.pow(m) as f32).log2().ceil() - overpr_n_u.log2().ceil();
-                                value = overpr_n_s * (s_k + overpr_n_s.log2().ceil()) + overpr_n_u * (quotient + s_c); 
+                                value = overpr_n_s * (s_k + (overpr_n_s * tables as f32).log2().ceil()) + overpr_n_u * (quotient + s_c); 
                                 value = value * tables as f32 / 8192 as f32;
                                 min[3] = min[3].min(value as u32);
                                 max[3] = max[3].max(value as u32);
@@ -378,8 +378,8 @@ fn main() {
                                 print!("\t{}",value);
 
                                 // SPADA - pIBLT. Suppose that we can use pIBLT with 3 tables of 8 bits to store the dds value + 64K*2^m bits (2^m*8KB) for the bitmap
-                                let bitmap = (overpr_n_s * 2u32.pow(m) as f32);
-                                value = overpr_n_s * (s_k + overpr_n_s.log2().ceil()) + (overpr_n_u * s_c);
+                                let bitmap = ( (overpr_n_s * tables as f32) * 2u32.pow(m) as f32);
+                                value = overpr_n_s * (s_k + (overpr_n_s * tables as f32).log2().ceil()) + (overpr_n_u * s_c);
                                 value = value * tables as f32;
                                 value = value + bitmap; // We use a single bitmap for all tables
                                 value = value / 8192 as f32;
@@ -398,7 +398,7 @@ fn main() {
                                 let overpr_n_s = ((n_s / load_pct) / tables as f32) as f32; // Overprovisioned to keep the load < load_pct
 
                                 // Baseline
-                                let mut value = overpr_n_s * (s_k + overpr_n_s.log2().ceil() + 2u32.pow(m) as f32 * s_c);
+                                let mut value = overpr_n_s * (s_k + (overpr_n_s * tables as f32).log2().ceil() + 2u32.pow(m) as f32 * s_c);
                                 value = value * tables as f32 / 8192 as f32;
                                 min[1] = min[1].min(value as u32);
                                 max[1] = max[1].max(value as u32);
@@ -408,7 +408,7 @@ fn main() {
                                 // SPADA - CHT. Suppose 16 bits for the FlowId + 5 for the hll value
                                 let n_u = sparseSketchArray.get_total_bins_count() as f32 * sparseSketchArray.get_occupancy(); // n_u here is sparsity across *all* counters
                                 let overpr_n_u = ((n_u / load_pct) / tables as f32) as f32;
-                                value = overpr_n_s * (s_k + overpr_n_s.log2().ceil()) + overpr_n_u * (overpr_n_s.log2().ceil() + m as f32 + s_c);
+                                value = overpr_n_s * (s_k + (overpr_n_s * tables as f32).log2().ceil()) + overpr_n_u * ((overpr_n_s * tables as f32).log2().ceil() + m as f32 + s_c);
                                 value = value * tables as f32 / 8192 as f32;
                                 min[2] = min[2].min(value as u32);
                                 max[2] = max[2].max(value as u32);
@@ -417,7 +417,7 @@ fn main() {
 
                                 // SPADA - qCHT. Suppose 4 tables of 14 bits to store (FlowId+Idx + the hll value)
                                 let quotient = (overpr_n_s * 2u32.pow(m) as f32).log2().ceil() - overpr_n_u.log2().ceil();
-                                value = overpr_n_s * (s_k + overpr_n_s.log2().ceil()) + overpr_n_u * (quotient + s_c);
+                                value = overpr_n_s * (s_k + (overpr_n_s * tables as f32).log2().ceil()) + overpr_n_u * (quotient + s_c);
                                 value = value * tables as f32 / 8192 as f32;
                                 min[3] = min[3].min(value as u32);
                                 max[3] = max[3].max(value as u32);
