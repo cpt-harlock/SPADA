@@ -317,7 +317,7 @@ fn main() {
                         if first_packet {
                             t0=ts; 
                             first_packet=false;
-                            println!("new epoch: [{}] ", epoch);
+                            println!("\nnew epoch: [{}] ", epoch);
                         }
                         ts = ts-t0-epoch_time*(epoch as f64);
                         //if (epoch==2) {exit(0)};
@@ -424,6 +424,9 @@ fn main() {
                                 tot[3] += value  as u32;
                                 print!("\t{}",value); 
                                 println!("\tN/A");
+
+                                // Number of rows required to ensure a load factor of `load_pct` 
+                                print!("Overprovisioned non-zero counters HLL SPADA-qCHT: {}\n",  overpr_n_u);
                             }
 
                             //test per oracolo perfetto
@@ -473,7 +476,7 @@ fn main() {
                             cuckoo = cuckoo_hash::CuckooHash::<u128,(u32,u32)>::build_cuckoo_hash(rows,tables,slots,16,datapath,2000);
                             sparseSketchArray = cuckoo_hash::CuckooHash::<u128,u32>::build_cuckoo_hash(rows,tables,slots,16,datapath,2000);
                             sparsehashmap.clear();
-                            println!("new epoch: [{}] ", epoch);
+                            println!("\nnew epoch: [{}] ", epoch);
                             num_packets =0;
                             num_insertions =0;
                             num_m0_insertions =0;
