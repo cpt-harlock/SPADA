@@ -307,8 +307,8 @@ fn main() {
                         //epoch reset and print
                         //let key  = (l3_packet.source(), l3_packet.destination(), proto, src_port, dst_port);
                         let key  = if ddsketch {
-                            //(l3_packet.source(), l3_packet.destination(), proto, src_port, dst_port)
-                            (l3_packet.source(),l3_packet.source(),0 ,0,0)
+                            (l3_packet.source(), l3_packet.destination(), proto, src_port, dst_port)
+                            //(l3_packet.source(),l3_packet.source(),0 ,0,0)
                         }
                         else 
                         {
