@@ -30,11 +30,11 @@ set key inside left Left reverse samplen 1.5
 set margins 5, 0.2, 2.7, 0.1
 
 plot \
-newhistogram "m=64", 'recirculation_worstcase.dat'\
+newhistogram "m=64", 'recirculation_worst_case.dat'\
 using "Datapath1m32":xtic(1) t "1 datapath" lt 3 lc 6 fs pattern 1,\
 '' u "Datapath2m32":xtic(1) t "2 datapaths" lt 5 lc 4 fs pattern 2,\
 '' u "Datapath4m32":xtic(1) t "4 datapaths" lt 6 lc 2 fs pattern 4,\
-newhistogram "m=128" at 4.2, 'recirculation_worstcase.dat'\
+newhistogram "m=128" at 4.2, 'recirculation_worst_case.dat'\
 using "Datapath1m64":xtic(1) not lt 3 lc 6 fs pattern 1,\
 '' u "Datapath2m64":xtic(1) not lt 5 lc 4 fs pattern 2,\
 '' u "Datapath4m64":xtic(1) not lt 6 lc 2 fs pattern 4,\

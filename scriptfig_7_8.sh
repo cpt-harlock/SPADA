@@ -7,6 +7,9 @@
 # run cargo build
 # run ./scriptfig_7_8.sh
 
+mkdir ./logs/fig_7_8 || true
+
+rm ./plots/*.dat || true
 
 # Simulations
 echo "Simulations started...";
@@ -39,6 +42,7 @@ awk '{if ($0 ~ /stat/) {printf("%s\n", $0) > "logs/fig_7_8/stats_CAIDA1_m7_d1_HL
 ./target/debug/spada -f ./traces/caida/CAIDA2.pcap -t 4 -s 1 -r 1048576 -m 7 -d 1 -e 1.0 | egrep "stat|plot|sparsity" | \
 awk '{if ($0 ~ /stat/) {printf("%s\n", $0) > "logs/fig_7_8/stats_CAIDA2_m7_d1_HLL.txt"} else if ($0 ~ /plot/) {printf("%s\n", $0) > "logs/fig_7_8/plot_CAIDA2_m7_d1_HLL.txt"} else if ($0 ~ /sparsity/) {printf("%s\n", $0) > "logs/fig_7_8/sparsity_CAIDA2_m7_d1_HLL.txt"}}' &
 
+wait
 # DDSketch
 
 # m = 32

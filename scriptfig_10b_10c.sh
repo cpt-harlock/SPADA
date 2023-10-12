@@ -123,7 +123,7 @@ echo "Running recirculation simulations with 90% load factor...";
     egrep "loads|stat" | \
     awk '{if ($0 ~ /loads/) {printf("%s\n", $0) > "logs/fig_10b_10c/load_MAWI2_m6_d4_HLL.txt"} else if ($0 ~ /stat/) {printf("%s\n", $0) > "logs/fig_10b_10c/stats_MAWI2_m6_d4_HLL.txt"}}';
 ) &
-
+wait
 # HLL m = 128
 (
     ./target/debug/spada -f ./traces/mawi/MAWI1.pcap -t 4 -s 1 -r $nrows_mawi1_m7_d1 -m 7 -d 1 -e 60.0 | \
@@ -161,7 +161,7 @@ echo "Running recirculation simulations with 90% load factor...";
 ) &
 
 # CAIDA
-
+wait
 # HLL m = 64
 (
     ./target/debug/spada -f ./traces/caida/CAIDA1.pcap -t 4 -s 1 -r $nrows_caida1_m6_d1 -m 6 -d 1 -e 1.0 | \
@@ -197,7 +197,7 @@ echo "Running recirculation simulations with 90% load factor...";
     egrep "loads|stat" | \
     awk '{if ($0 ~ /loads/) {printf("%s\n", $0) > "logs/fig_10b_10c/load_CAIDA2_m6_d4_HLL.txt"} else if ($0 ~ /stat/) {printf("%s\n", $0) > "logs/fig_10b_10c/stats_CAIDA2_m6_d4_HLL.txt"}}';
 ) &
-
+wait
 # HLL m = 128
 (
     ./target/debug/spada -f ./traces/caida/CAIDA1.pcap -t 4 -s 1 -r $nrows_caida1_m7_d1 -m 7 -d 1 -e 1.0 | \
@@ -276,6 +276,43 @@ cat - <(tail -1 logs/fig_10b_10c/stats_CAIDA2_m6_d4_HLL.txt) | tr '\n' '\t' | \
 cat - <(tail -1 logs/fig_10b_10c/stats_CAIDA2_m7_d4_HLL.txt) | tr '\n' '\t' | \
 awk -F "\t" '{print "C2" "\t" $4  "\t" $10  "\t" $16  "\t" $22  "\t" $28  "\t" $34}' >> plots/recirculation_overall.dat;
 
+# Parse results
+touch ./plots/recirculation_worst_case.dat;
+echo "Trace Datapath1m32 Datapath1m64 Datapath2m32 Datapath2m64 Datapath4m32 Datapath4m64" >> ./plots/recirculation_worst_case.dat;
+
+# MAWI
+tail -1 logs/fig_10b_10c/stats_MAWI1_m6_d1_HLL.txt | \
+cat - <(tail -1 logs/fig_10b_10c/stats_MAWI1_m7_d1_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_MAWI1_m6_d2_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_MAWI1_m7_d2_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_MAWI1_m6_d4_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_MAWI1_m7_d4_HLL.txt) | tr '\n' '\t' | \
+awk -F "\t" '{print "M1" "\t" $5  "\t" $11  "\t" $17  "\t" $23  "\t" $29  "\t" $35}' >> plots/recirculation_worst_case.dat;
+
+tail -1 logs/fig_10b_10c/stats_MAWI2_m6_d1_HLL.txt | \
+cat - <(tail -1 logs/fig_10b_10c/stats_MAWI2_m7_d1_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_MAWI2_m6_d2_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_MAWI2_m7_d2_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_MAWI2_m6_d4_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_MAWI2_m7_d4_HLL.txt) | tr '\n' '\t' | \
+awk -F "\t" '{print "M2" "\t" $5  "\t" $11  "\t" $17  "\t" $23  "\t" $29  "\t" $35}' >> plots/recirculation_worst_case.dat;
+
+# CAIDA
+tail -1 logs/fig_10b_10c/stats_CAIDA1_m6_d1_HLL.txt | \
+cat - <(tail -1 logs/fig_10b_10c/stats_CAIDA1_m7_d1_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_CAIDA1_m6_d2_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_CAIDA1_m7_d2_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_CAIDA1_m6_d4_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_CAIDA1_m7_d4_HLL.txt) | tr '\n' '\t' | \
+awk -F "\t" '{print "C1" "\t" $5  "\t" $11  "\t" $17  "\t" $23  "\t" $29  "\t" $35}' >> plots/recirculation_worst_case.dat;
+
+tail -1 logs/fig_10b_10c/stats_CAIDA2_m6_d1_HLL.txt | \
+cat - <(tail -1 logs/fig_10b_10c/stats_CAIDA2_m7_d1_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_CAIDA2_m6_d2_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_CAIDA2_m7_d2_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_CAIDA2_m6_d4_HLL.txt) | tr '\n' '\t' | \
+cat - <(tail -1 logs/fig_10b_10c/stats_CAIDA2_m7_d4_HLL.txt) | tr '\n' '\t' | \
+awk -F "\t" '{print "C2" "\t" $5  "\t" $11  "\t" $17  "\t" $23  "\t" $29  "\t" $35}' >> plots/recirculation_worst_case.dat;
 echo "Results parsed.";
 
 
@@ -283,4 +320,5 @@ echo "Results parsed.";
 
 cd ./plots;
 gnuplot fig10b.gp;
+gnuplot fig10c.gp;
 echo "Plots saved.";
