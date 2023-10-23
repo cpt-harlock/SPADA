@@ -1,3 +1,14 @@
-./logs/*
-./traces/*
-./target/*
+.idea
+target
+Cargo.lock
+
+logs
+plots/*.png
+plots/*.dat
+plots/*/*.dat
+
+traces/mawi/*.pcap
+traces/mawi/*.txt
+traces/caida/*.pcap
+traces/caida/*.txt
+
