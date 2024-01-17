@@ -1,7 +1,7 @@
 ## SPADA: A Sparse Approximate Data Structure representation for data plane per-flow monitoring
 
 This repository contains the simulator code used to evaluate the SPADA paradigm for data plane monitoring systems in the
-research paper [SPADA: A Sparse Approximate Data Structure representation for data plane per-flow monitoring]().
+research paper [SPADA: A Sparse Approximate Data Structure representation for data plane per-flow monitoring](https://dl.acm.org/doi/10.1145/3629149).
 SPADA consists of a compact encoding of monitoring data structures in the data plane: due to the skewed nature of 
 network traffic, such data structures are, in practice, heavily underutilized, thus wasting a significant amount of
 memory. The main idea od SPADA is to replace full sketches with a series of non-zero counters, hence dynamically 
@@ -67,5 +67,5 @@ also contains source ``gnuplot`` files used to generate these pictures.
 For details about SPADA, please refer to the following research paper. We kindly ask you to cite it should you use SPADA 
 in your work.
 - Monterubbiano A., Azorin R., Castellano G., Gallo M., Pontarelli S., Rossi D., [SPADA: A Sparse Approximate Data 
-Structure representation for data plane per-flow monitoring](). In ACM CoNext 2023 (Proceedings of the ACM on Networking
+Structure representation for data plane per-flow monitoring](https://dl.acm.org/doi/10.1145/3629149). In ACM CoNext 2023 (Proceedings of the ACM on Networking
 (PACMNET)).
