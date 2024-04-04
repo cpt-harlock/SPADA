@@ -2,9 +2,10 @@
 
 This repository contains the simulator code used to evaluate the SPADA paradigm for data plane monitoring systems in the
 research paper [SPADA: A Sparse Approximate Data Structure representation for data plane per-flow monitoring](https://dl.acm.org/doi/10.1145/3629149).
+
 SPADA consists of a compact encoding of monitoring data structures in the data plane: due to the skewed nature of 
 network traffic, such data structures are, in practice, heavily underutilized, thus wasting a significant amount of
-memory. The main idea od SPADA is to replace full sketches with a series of non-zero counters, hence dynamically 
+memory. The main idea of SPADA is to replace full sketches with a series of non-zero counters, hence dynamically 
 adjusting the memory footprint of each (virtual) sketch to the actual skewness of the flow(s) monitored using that 
 sketch.
 
